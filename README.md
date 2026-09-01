@@ -77,7 +77,7 @@ A finished report lives at `#/report/<id>` and is stored in SQLite (`data/scans.
 
 Try a Sourcify-verified mainnet address (no Etherscan key):
 
-`0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D` — Uniswap V2 Router
+`0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D` – Uniswap V2 Router
 
 Contracts that exist only on Etherscan need `ETHERSCAN_API_KEY` in `.env` and a restarted API process.
 
@@ -99,11 +99,11 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format sarif
 
 ## API
 
-- `POST /scan` — `{ "address": "0x..." }` or `{ "source": "pragma ..." }`
-- `GET /scan/{id}` — stored result
-- `GET /scan/{id}/report.md` — Markdown report
-- `GET /scan/{id}/report.sarif` — SARIF 2.1.0
-- `GET /contract/{address}` — verification + on-chain signals
+- `POST /scan` – `{ "address": "0x..." }` or `{ "source": "pragma ..." }`
+- `GET /scan/{id}` – stored result
+- `GET /scan/{id}/report.md` – Markdown report
+- `GET /scan/{id}/report.sarif` – SARIF 2.1.0
+- `GET /contract/{address}` – verification + on-chain signals
 - `GET /health`
 
 ## Configuration

@@ -130,14 +130,16 @@ GitHub Actions (`.github/workflows/security.yml`) runs pytest, gates on safe con
 
 ## Docker
 
-Supported day-to-day path is Vite + uvicorn above. Compose is included:
+Requires Docker Desktop (or another Compose-capable engine). From the repo root:
 
 ```bash
 docker compose up --build
 ```
 
 - UI: http://localhost:3000
-- API: http://localhost:8000
+- API: http://localhost:8000/health
+
+The UI proxies `/api` to the API container. Stop a local uvicorn on port 8000 first if that port is already in use.
 
 ## Layout
 

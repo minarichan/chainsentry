@@ -7,6 +7,7 @@ services:
       ETHERSCAN_API_KEY: ${ETHERSCAN_API_KEY:-}
       ETHERSCAN_CHAIN_ID: ${ETHERSCAN_CHAIN_ID:-1}
       ETH_RPC_URL: ${ETH_RPC_URL:-https://eth.llamarpc.com}
+      SCAN_DB_PATH: /app/data/scans.sqlite
     volumes:
       - ./reports:/app/reports
       - ./data:/app/data

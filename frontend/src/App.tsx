@@ -32,11 +32,11 @@ export default function App() {
         setLoadingReport(true);
         setLoadError(null);
         void getScan(next.id)
-          .then((payload) => {
+          .then((payload: ScanResult) => {
             setResult(payload);
             setView("report");
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             setResult(null);
             setLoadError(err instanceof Error ? err.message : "Scan not found");
             setView("scan");

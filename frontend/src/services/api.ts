@@ -32,6 +32,12 @@ export async function scanAddress(address: string): Promise<ScanResult> {
   return response.json();
 }
 
+export async function getScan(id: string): Promise<ScanResult> {
+  const response = await fetch(`${API_BASE}/scan/${id}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
 export async function downloadScanExport(id: string, kind: "markdown" | "sarif"): Promise<void> {
   const suffix = kind === "markdown" ? "report.md" : "report.sarif";
   const response = await fetch(`${API_BASE}/scan/${id}/${suffix}`);

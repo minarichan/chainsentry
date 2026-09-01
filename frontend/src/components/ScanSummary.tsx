@@ -56,7 +56,7 @@ export function ScanSummary({
   for (const finding of findings) {
     counts[finding.severity] += 1;
   }
-  const byDetector = new Map(DETECTORS.map((d) => [d.id, 0]));
+  const byDetector = new Map<string, number>(DETECTORS.map((d) => [d.id, 0]));
   for (const finding of findings) {
     byDetector.set(finding.id, (byDetector.get(finding.id) ?? 0) + 1);
   }

@@ -73,6 +73,8 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to the process on port 8000.
 
+A finished report lives at `#/report/<id>` and is stored in SQLite (`data/scans.sqlite`) so refresh and copy-link work after the API restarts.
+
 Try a Sourcify-verified mainnet address (no Etherscan key):
 
 `0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D` — Uniswap V2 Router

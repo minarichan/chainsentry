@@ -33,6 +33,7 @@ function uniqueFindings(findings: Finding[]): Finding[] {
 export function ReportPage({ result, onReset }: { result: ScanResult; onReset: () => void }) {
   const [tab, setTab] = useState<"overview" | "findings" | "functions" | "onchain">("overview");
   const [exportError, setExportError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const findings = uniqueFindings(result.findings);
 
   async function onExport(kind: "markdown" | "sarif") {
@@ -41,6 +42,17 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
       await downloadScanExport(result.id, kind);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
+    }
+  }
+
+  async function copyLink() {
+    const url = `${window.location.origin}${window.location.pathname}#/report/${result.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setExportError("Could not copy link");
     }
   }
 
@@ -54,6 +66,9 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
           <h1 style={{ fontSize: "clamp(32px, 4vw, 48px)" }}>Security report</h1>
         </div>
         <div className="meta-actions">
+          <button className="btn ghost small" type="button" onClick={() => void copyLink()}>
+            {copied ? "Copied" : "Copy link"}
+          </button>
           <button className="btn ghost small" type="button" onClick={() => void onExport("markdown")}>
             Markdown
           </button>

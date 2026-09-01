@@ -23,6 +23,7 @@ contract Reentrancy {
 
 interface Props {
   onResult: (result: ScanResult) => void;
+  loadError?: string | null;
 }
 
 function focusAddress() {
@@ -30,7 +31,7 @@ function focusAddress() {
   document.getElementById("contract-address")?.focus();
 }
 
-export function ScanPage({ onResult }: Props) {
+export function ScanPage({ onResult, loadError }: Props) {
   const [address, setAddress] = useState("");
   const [source, setSource] = useState(SAMPLE);
   const [showSource, setShowSource] = useState(false);
@@ -109,7 +110,7 @@ export function ScanPage({ onResult }: Props) {
         fully analyzed.
       </p>
 
-      {error ? <p className="stop">{error}</p> : null}
+      {error || loadError ? <p className="stop">{error || loadError}</p> : null}
 
       <p>
         <button

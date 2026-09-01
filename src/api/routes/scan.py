@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
 from api.schemas.scan import ScanRequest, result_to_summary
+from api.store import load_scan, save_scan
 from scanner.engine import scan_source, scan_verified
 from scanner.etherscan import SourceNotVerifiedError, UnsupportedCompilerError
 from scanner.models import ScanResult
@@ -15,9 +16,6 @@ from scanner.proxy import apply_scan_target, fetch_scan_target
 from scanner.reporting import render_markdown, render_sarif
 
 router = APIRouter(tags=["scan"])
-
-# In-memory job store — enough for local demos and the dashboard.
-SCANS: dict[str, ScanResult] = {}
 
 
 @router.post("/scan")
@@ -50,20 +48,20 @@ def create_scan(body: ScanRequest) -> dict:
         result.network = "Local"
 
     scan_id = str(uuid.uuid4())
-    SCANS[scan_id] = result
+    save_scan(scan_id, result)
     return result_to_summary(scan_id, result)
 
 
 @router.get("/scan/{scan_id}")
 def get_scan(scan_id: str) -> dict:
-    result = SCANS.get(scan_id)
+    result = load_scan(scan_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return result_to_summary(scan_id, result)
 
 
 def _stored_scan(scan_id: str) -> ScanResult:
-    result = SCANS.get(scan_id)
+    result = load_scan(scan_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return result

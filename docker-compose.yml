@@ -9,6 +9,7 @@ services:
       ETH_RPC_URL: ${ETH_RPC_URL:-https://eth.llamarpc.com}
     volumes:
       - ./reports:/app/reports
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 20s

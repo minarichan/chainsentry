@@ -15,7 +15,10 @@ COPY contracts ./contracts
 
 ENV PYTHONPATH=/app/src \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    SCAN_DB_PATH=/app/data/scans.sqlite
+
+RUN mkdir -p /app/data
 
 EXPOSE 8000
 

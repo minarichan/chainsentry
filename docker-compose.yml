@@ -1,0 +1,24 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      ETHERSCAN_API_KEY: ${ETHERSCAN_API_KEY:-}
+      ETHERSCAN_CHAIN_ID: ${ETHERSCAN_CHAIN_ID:-1}
+      ETH_RPC_URL: ${ETH_RPC_URL:-https://eth.llamarpc.com}
+    volumes:
+      - ./reports:/app/reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy

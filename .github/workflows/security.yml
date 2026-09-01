@@ -1,0 +1,64 @@
+name: security-scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run tests
+        run: pytest
+
+      - name: Compile and scan safe contracts (gate)
+        run: |
+          python -m scanner scan contracts/safe/SafeReentrancy.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SafeAccessControl.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/AmmMint.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SwapDeadline.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SafeTokenReentrancy.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SafeErc20Return.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SafeInitialize.sol --format all --fail-on high
+          python -m scanner scan contracts/safe/SafeTransferFrom.sol --format all --fail-on high
+
+      - name: Scan vulnerable fixtures (report only)
+        run: |
+          python -m scanner scan contracts/vulnerable/Reentrancy.sol --format all
+          python -m scanner scan contracts/vulnerable/TxOrigin.sol --format json
+          python -m scanner scan contracts/example.sol --format html
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: reports/
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build dashboard
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build

@@ -7,6 +7,7 @@ from typing import Optional
 
 from web3 import Web3
 
+from scanner.chains import resolve_chain
 from scanner.models import OnChainAnalysis
 
 # EIP-1967 implementation slot
@@ -24,8 +25,8 @@ OWNER_ABI = [
 ]
 
 
-def _web3(rpc_url: Optional[str] = None) -> Web3:
-    url = rpc_url or os.getenv("ETH_RPC_URL") or "https://eth.llamarpc.com"
+def _web3(rpc_url: Optional[str] = None, chain_id: Optional[int] = None) -> Web3:
+    url = (rpc_url or "").strip() or resolve_chain(chain_id).rpc_url()
     return Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 20}))
 
 
@@ -48,7 +49,11 @@ def _slot_address(w3: Web3, address: str, slot: str) -> Optional[str]:
         return None
 
 
-def _etherscan_tx_stats(address: str, api_key: Optional[str] = None) -> tuple[Optional[int], Optional[int]]:
+def _etherscan_tx_stats(
+    address: str,
+    api_key: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> tuple[Optional[int], Optional[int]]:
     from scanner.etherscan import etherscan_get
 
     key = api_key or os.getenv("ETHERSCAN_API_KEY") or ""
@@ -67,6 +72,7 @@ def _etherscan_tx_stats(address: str, api_key: Optional[str] = None) -> tuple[Op
                 "sort": "desc",
             },
             api_key=key,
+            chain_id=chain_id,
         )
         rows = data.get("result") if data.get("status") == "1" else []
         if not isinstance(rows, list):
@@ -84,8 +90,9 @@ def analyze_address(
     api_key: Optional[str] = None,
     network: str = "Ethereum Mainnet",
     verified: bool = False,
+    chain_id: Optional[int] = None,
 ) -> OnChainAnalysis:
-    w3 = _web3(rpc_url)
+    w3 = _web3(rpc_url, chain_id)
     checksum = Web3.to_checksum_address(address)
     signals: list[str] = []
     notes: list[str] = []
@@ -119,7 +126,7 @@ def analyze_address(
     except Exception:
         owner = None
 
-    tx_count, unique_users = _etherscan_tx_stats(checksum, api_key)
+    tx_count, unique_users = _etherscan_tx_stats(checksum, api_key, chain_id=chain_id)
     if tx_count is None:
         notes.append("Transaction stats require ETHERSCAN_API_KEY.")
 

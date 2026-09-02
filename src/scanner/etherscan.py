@@ -12,6 +12,7 @@ from typing import Any, Optional
 import httpx
 
 from scanner import settings as _settings  # noqa: F401  loads .env
+from scanner.chains import resolve_chain
 
 ETHERSCAN_V2_URL = os.getenv("ETHERSCAN_API_URL", "https://api.etherscan.io/v2/api")
 VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
@@ -42,13 +43,6 @@ class VerifiedContract:
     is_proxy: bool = False
     implementation: Optional[str] = None
     extra: dict = field(default_factory=dict)
-
-
-def _chain_id() -> int:
-    try:
-        return int(os.getenv("ETHERSCAN_CHAIN_ID", "1"))
-    except ValueError:
-        return 1
 
 
 def parse_solc_version(raw: str) -> Optional[str]:
@@ -131,13 +125,17 @@ def _api_key(explicit: Optional[str] = None) -> str:
     return (explicit or os.getenv("ETHERSCAN_API_KEY") or "").strip()
 
 
-def etherscan_get(params: dict[str, Any], api_key: Optional[str] = None) -> dict[str, Any]:
+def etherscan_get(
+    params: dict[str, Any],
+    api_key: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> dict[str, Any]:
     key = _api_key(api_key)
     if not key:
         raise RuntimeError(
             "Missing ETHERSCAN_API_KEY. Copy .env.example to .env and add a free key from https://etherscan.io/apis"
         )
-    query = {"chainid": _chain_id(), "apikey": key, **params}
+    query = {"chainid": resolve_chain(chain_id).id, "apikey": key, **params}
     with httpx.Client(timeout=30.0) as client:
         response = client.get(ETHERSCAN_V2_URL, params=query)
         response.raise_for_status()
@@ -148,16 +146,11 @@ def _from_etherscan_row(address: str, row: dict[str, Any]) -> VerifiedContract:
     source_raw = row.get("SourceCode") or ""
     name = row.get("ContractName") or "Unknown"
     if not source_raw or source_raw in {"", "0"}:
-        raise SourceNotVerifiedError(
-            f"Contract {address} is not verified on Etherscan. "
-            "Static analysis needs verified Solidity source — bytecode-only scan is not supported."
-        )
+        raise SourceNotVerifiedError("Not verified on Etherscan.")
 
     compiler_raw = row.get("CompilerVersion") or ""
     if compiler_raw.lower().startswith("vyper"):
-        raise UnsupportedCompilerError(
-            f"Contract {address} is verified as Vyper ({compiler_raw}). This scanner only analyzes Solidity."
-        )
+        raise UnsupportedCompilerError("This contract is Vyper. ChainSentry only analyzes Solidity.")
 
     files, primary, optimizer, remappings, evm_version = parse_source_files(source_raw, name)
     solc_version = parse_solc_version(compiler_raw) or ""
@@ -201,10 +194,15 @@ def _from_etherscan_row(address: str, row: dict[str, Any]) -> VerifiedContract:
     )
 
 
-def fetch_from_etherscan(address: str, api_key: Optional[str] = None) -> VerifiedContract:
+def fetch_from_etherscan(
+    address: str,
+    api_key: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> VerifiedContract:
     data = etherscan_get(
         {"module": "contract", "action": "getsourcecode", "address": address},
         api_key=api_key,
+        chain_id=chain_id,
     )
     if data.get("status") != "1" or not data.get("result"):
         message = data.get("result") or data.get("message") or "Unknown Etherscan error"
@@ -217,17 +215,14 @@ def fetch_from_etherscan(address: str, api_key: Optional[str] = None) -> Verifie
     return _from_etherscan_row(address, row)
 
 
-def fetch_from_sourcify(address: str) -> VerifiedContract:
-    chain = _chain_id()
+def fetch_from_sourcify(address: str, chain_id: Optional[int] = None) -> VerifiedContract:
+    chain = resolve_chain(chain_id).id
     url = f"https://sourcify.dev/server/v2/contract/{chain}/{address}"
     params = {"fields": "compilation,stdJsonInput,proxyResolution"}
     with httpx.Client(timeout=30.0) as client:
         response = client.get(url, params=params)
         if response.status_code == 404:
-            raise SourceNotVerifiedError(
-                f"Contract {address} is not verified on Sourcify. "
-                "Static analysis needs verified Solidity source — bytecode-only scan is not supported."
-            )
+            raise SourceNotVerifiedError("Not verified on Sourcify.")
         response.raise_for_status()
         payload = response.json()
 
@@ -235,9 +230,7 @@ def fetch_from_sourcify(address: str) -> VerifiedContract:
     language = str(compilation.get("language") or "")
     compiler_raw = str(compilation.get("compilerVersion") or "")
     if language.lower() == "vyper" or compiler_raw.lower().startswith("vyper"):
-        raise UnsupportedCompilerError(
-            f"Contract {address} is verified as Vyper. This scanner only analyzes Solidity."
-        )
+        raise UnsupportedCompilerError("This contract is Vyper. ChainSentry only analyzes Solidity.")
 
     std = payload.get("stdJsonInput") if isinstance(payload.get("stdJsonInput"), dict) else {}
     sources_blob = std.get("sources") if isinstance(std.get("sources"), dict) else {}
@@ -247,9 +240,7 @@ def fetch_from_sourcify(address: str) -> VerifiedContract:
         if content:
             files[str(name)] = content
     if not files:
-        raise SourceNotVerifiedError(
-            f"Contract {address} is not verified with recoverable Solidity source."
-        )
+        raise SourceNotVerifiedError("Sourcify listed the contract but returned no Solidity source.")
 
     settings = compilation.get("compilerSettings") if isinstance(compilation.get("compilerSettings"), dict) else {}
     if not settings and isinstance(std.get("settings"), dict):
@@ -289,32 +280,20 @@ def fetch_from_sourcify(address: str) -> VerifiedContract:
     )
 
 
-def _blockscout_contract_url(address: str) -> str | None:
-    custom = (os.getenv("BLOCKSCOUT_API_URL") or "").strip().rstrip("/")
-    if custom:
-        return f"{custom}/{address}"
-    if _chain_id() == 1:
-        return f"https://eth.blockscout.com/api/v2/smart-contracts/{address}"
-    return None
+def _blockscout_contract_url(address: str, chain_id: Optional[int] = None) -> str:
+    return resolve_chain(chain_id).blockscout_contract_url(address)
 
 
 def _from_blockscout_payload(address: str, payload: dict[str, Any]) -> VerifiedContract:
     source = payload.get("source_code") or ""
     if not payload.get("is_verified") and not source:
-        raise SourceNotVerifiedError(
-            f"Contract {address} is not verified on Blockscout. "
-            "Static analysis needs verified Solidity source — bytecode-only scan is not supported."
-        )
+        raise SourceNotVerifiedError("Not verified on Blockscout.")
     if not source:
-        raise SourceNotVerifiedError(
-            f"Contract {address} is verified on Blockscout but source was not returned."
-        )
+        raise SourceNotVerifiedError("Blockscout marked it verified but returned no source.")
 
     compiler_raw = str(payload.get("compiler_version") or "")
     if str(payload.get("language") or "").lower() == "vyper" or compiler_raw.lower().startswith("vyper"):
-        raise UnsupportedCompilerError(
-            f"Contract {address} is verified as Vyper. This scanner only analyzes Solidity."
-        )
+        raise UnsupportedCompilerError("This contract is Vyper. ChainSentry only analyzes Solidity.")
 
     name = str(payload.get("name") or "Contract")
     primary = str(payload.get("file_path") or f"{name}.sol")
@@ -364,19 +343,12 @@ def _from_blockscout_payload(address: str, payload: dict[str, Any]) -> VerifiedC
     )
 
 
-def fetch_from_blockscout(address: str) -> VerifiedContract:
-    url = _blockscout_contract_url(address)
-    if not url:
-        raise SourceNotVerifiedError(
-            f"No Blockscout API for chain {_chain_id()}. Set BLOCKSCOUT_API_URL or use ETHERSCAN_API_KEY."
-        )
+def fetch_from_blockscout(address: str, chain_id: Optional[int] = None) -> VerifiedContract:
+    url = _blockscout_contract_url(address, chain_id=chain_id)
     with httpx.Client(timeout=30.0) as client:
         response = client.get(url)
         if response.status_code == 404:
-            raise SourceNotVerifiedError(
-                f"Contract {address} is not verified on Blockscout. "
-                "Static analysis needs verified Solidity source — bytecode-only scan is not supported."
-            )
+            raise SourceNotVerifiedError("Not verified on Blockscout.")
         response.raise_for_status()
         payload = response.json()
     if not isinstance(payload, dict):
@@ -384,49 +356,57 @@ def fetch_from_blockscout(address: str) -> VerifiedContract:
     return _from_blockscout_payload(address, payload)
 
 
-def fetch_verified_source(address: str, api_key: Optional[str] = None) -> VerifiedContract:
+def _short_exc(exc: BaseException) -> str:
+    text = str(exc).strip().splitlines()[0]
+    return text[:100]
+
+
+def fetch_verified_source(
+    address: str,
+    api_key: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> VerifiedContract:
     """Fetch verified Solidity: Sourcify, then Etherscan V2 (API key), then Blockscout."""
     from scanner.settings import load_environment
 
     load_environment()
+    spec = resolve_chain(chain_id)
     key = _api_key(api_key)
+    missed: list[str] = []
     errors: list[str] = []
-    not_verified: list[str] = []
 
     try:
-        return fetch_from_sourcify(address)
+        return fetch_from_sourcify(address, chain_id=spec.id)
     except UnsupportedCompilerError:
         raise
-    except SourceNotVerifiedError as exc:
-        not_verified.append(str(exc))
+    except SourceNotVerifiedError:
+        missed.append("Sourcify")
     except Exception as exc:
-        errors.append(f"Sourcify: {exc}")
+        errors.append(f"Sourcify failed ({_short_exc(exc)})")
 
     if key:
         try:
-            return fetch_from_etherscan(address, api_key=key)
+            return fetch_from_etherscan(address, api_key=key, chain_id=spec.id)
         except UnsupportedCompilerError:
             raise
-        except SourceNotVerifiedError as exc:
-            not_verified.append(str(exc))
+        except SourceNotVerifiedError:
+            missed.append("Etherscan")
         except Exception as exc:
-            errors.append(f"Etherscan: {exc}")
+            errors.append(f"Etherscan failed ({_short_exc(exc)})")
 
     try:
-        return fetch_from_blockscout(address)
+        return fetch_from_blockscout(address, chain_id=spec.id)
     except UnsupportedCompilerError:
         raise
-    except SourceNotVerifiedError as exc:
-        not_verified.append(str(exc))
+    except SourceNotVerifiedError:
+        missed.append("Blockscout")
     except Exception as exc:
-        errors.append(f"Blockscout: {exc}")
+        errors.append(f"Blockscout failed ({_short_exc(exc)})")
 
-    parts = list(not_verified)
+    names = ", ".join(missed) if missed else "explorers"
+    message = f"No verified Solidity source on {names}."
     if not key:
-        parts.append(
-            "Etherscan was not queried (no ETHERSCAN_API_KEY). "
-            "Copy .env.example to .env, add a free key from https://etherscan.io/apis, and scan again."
-        )
+        message += " Add ETHERSCAN_API_KEY to .env to try Etherscan."
     if errors:
-        parts.extend(errors)
-    raise SourceNotVerifiedError(" ".join(parts))
+        message += " " + " ".join(errors)
+    raise SourceNotVerifiedError(message)

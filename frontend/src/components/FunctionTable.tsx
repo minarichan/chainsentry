@@ -3,7 +3,7 @@ import { SeverityDot } from "./ScoreGauge";
 
 export function FunctionTable({ surfaces }: { surfaces: FunctionSurface[] }) {
   return (
-    <table>
+    <table className="stack">
       <thead>
         <tr>
           <th>Function</th>
@@ -16,19 +16,19 @@ export function FunctionTable({ surfaces }: { surfaces: FunctionSurface[] }) {
       <tbody>
         {surfaces.map((fn) => (
           <tr key={`${fn.contract}.${fn.name}.${fn.line}`}>
-            <td>
+            <td data-label="Function">
               <code>
                 {fn.name}()
               </code>
             </td>
-            <td>{fn.visibility}</td>
-            <td>{fn.mutability}</td>
-            <td>
+            <td data-label="Visibility">{fn.visibility}</td>
+            <td data-label="Mutability">{fn.mutability}</td>
+            <td data-label="Risk">
               <span className="pill">
                 <SeverityDot severity={fn.risk} /> {fn.risk}
               </span>
             </td>
-            <td>
+            <td data-label="Notes">
               <ul className="flags">
                 {fn.notes.map((note) => (
                   <li key={note}>{note}</li>

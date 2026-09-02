@@ -32,7 +32,7 @@ def test_fetch_falls_through_to_blockscout(monkeypatch) -> None:
     monkeypatch.setattr("scanner.etherscan._api_key", lambda explicit=None: "")
     monkeypatch.setattr(
         "scanner.etherscan.fetch_from_sourcify",
-        lambda address: (_ for _ in ()).throw(
+        lambda address, chain_id=None: (_ for _ in ()).throw(
             SourceNotVerifiedError("not on sourcify")
         ),
     )
@@ -45,7 +45,7 @@ def test_fetch_falls_through_to_blockscout(monkeypatch) -> None:
         verified=True,
         extra={"source": "blockscout"},
     )
-    monkeypatch.setattr("scanner.etherscan.fetch_from_blockscout", lambda address: impl)
+    monkeypatch.setattr("scanner.etherscan.fetch_from_blockscout", lambda address, chain_id=None: impl)
     got = fetch_verified_source("0x0000000000000000000000000000000000000001")
     assert got.name == "FromBlockscout"
 
@@ -54,7 +54,7 @@ def test_fetch_uses_etherscan_when_key_present(monkeypatch) -> None:
     monkeypatch.setattr("scanner.etherscan._api_key", lambda explicit=None: "test-key")
     monkeypatch.setattr(
         "scanner.etherscan.fetch_from_sourcify",
-        lambda address: (_ for _ in ()).throw(SourceNotVerifiedError("not on sourcify")),
+        lambda address, chain_id=None: (_ for _ in ()).throw(SourceNotVerifiedError("not on sourcify")),
     )
     impl = VerifiedContract(
         address="0x1",
@@ -65,9 +65,9 @@ def test_fetch_uses_etherscan_when_key_present(monkeypatch) -> None:
         verified=True,
         extra={"source": "etherscan"},
     )
-    monkeypatch.setattr("scanner.etherscan.fetch_from_etherscan", lambda address, api_key=None: impl)
+    monkeypatch.setattr("scanner.etherscan.fetch_from_etherscan", lambda address, api_key=None, chain_id=None: impl)
 
-    def fail_blockscout(address):
+    def fail_blockscout(address, chain_id=None):
         raise AssertionError("Blockscout should not run if Etherscan succeeded")
 
     monkeypatch.setattr("scanner.etherscan.fetch_from_blockscout", fail_blockscout)
@@ -79,16 +79,19 @@ def test_fetch_error_mentions_missing_etherscan_key(monkeypatch) -> None:
     monkeypatch.setattr("scanner.etherscan._api_key", lambda explicit=None: "")
     monkeypatch.setattr(
         "scanner.etherscan.fetch_from_sourcify",
-        lambda address: (_ for _ in ()).throw(SourceNotVerifiedError("not on sourcify")),
+        lambda address, chain_id=None: (_ for _ in ()).throw(SourceNotVerifiedError("not on sourcify")),
     )
     monkeypatch.setattr(
         "scanner.etherscan.fetch_from_blockscout",
-        lambda address: (_ for _ in ()).throw(SourceNotVerifiedError("not on blockscout")),
+        lambda address, chain_id=None: (_ for _ in ()).throw(SourceNotVerifiedError("not on blockscout")),
     )
     try:
         fetch_verified_source("0x0000000000000000000000000000000000000001")
         raise AssertionError("expected SourceNotVerifiedError")
     except SourceNotVerifiedError as exc:
         message = str(exc)
-        assert "not on sourcify" in message
+        assert "Sourcify" in message
+        assert "Blockscout" in message
         assert "ETHERSCAN_API_KEY" in message
+        assert "bytecode-only" not in message
+        assert "0x0000000000000000000000000000000000000001" not in message

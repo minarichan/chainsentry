@@ -129,7 +129,7 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
           <div>
             {result.onchain ? (
               <>
-                <p className="mono">{result.onchain.address}</p>
+                <p className="mono address-line">{result.onchain.address}</p>
                 <p className="muted">{result.onchain.network}</p>
                 <ul>
                   <li>Verified: {result.onchain.verified ? "yes" : "no"}</li>
@@ -148,7 +148,7 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
                 </ul>
               </>
             ) : (
-              <p className="muted">On-chain analysis is available when you scan a verified Ethereum address.</p>
+              <p className="muted">On-chain analysis is available when you scan a verified address.</p>
             )}
           </div>
         )}

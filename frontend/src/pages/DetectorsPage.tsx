@@ -14,7 +14,7 @@ export function DetectorsPage() {
           <h2>Built-in checks</h2>
           <span className="muted">{DETECTORS.length} detectors</span>
         </div>
-        <table>
+        <table className="stack">
           <thead>
             <tr>
               <th>Detector</th>
@@ -25,12 +25,14 @@ export function DetectorsPage() {
           <tbody>
             {DETECTORS.map((item) => (
               <tr key={item.id}>
-                <td>
+                <td data-label="Detector">
                   <strong>{item.title}</strong>
                   <div className="muted">{item.swc}</div>
                 </td>
-                <td className="mono">{item.id}</td>
-                <td>{item.summary}</td>
+                <td className="mono" data-label="ID">
+                  {item.id}
+                </td>
+                <td data-label="What it flags">{item.summary}</td>
               </tr>
             ))}
           </tbody>

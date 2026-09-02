@@ -8,7 +8,14 @@ from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
-_ENV_KEYS = ("ETHERSCAN_API_KEY", "ETHERSCAN_CHAIN_ID", "ETH_RPC_URL", "BLOCKSCOUT_API_URL")
+_ENV_KEYS = (
+    "ETHERSCAN_API_KEY",
+    "ETHERSCAN_CHAIN_ID",
+    "ETH_RPC_URL",
+    "BASE_RPC_URL",
+    "ARB_RPC_URL",
+    "BLOCKSCOUT_API_URL",
+)
 
 
 def sync_empty_keys_from_dotenv() -> None:

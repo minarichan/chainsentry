@@ -1,3 +1,10 @@
+FROM node:20-alpine AS frontend
+WORKDIR /ui
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -12,14 +19,17 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY src ./src
 COPY contracts ./contracts
+COPY --from=frontend /ui/dist ./frontend/dist
 
 ENV PYTHONPATH=/app/src \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    SCAN_DB_PATH=/app/data/scans.sqlite
+    SCAN_DB_PATH=/app/data/scans.sqlite \
+    FRONTEND_DIST=/app/frontend/dist \
+    SCAN_TIMEOUT_SEC=120
 
 RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

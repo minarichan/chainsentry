@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
 from api.schemas.scan import ScanRequest, result_to_summary
 from api.store import load_scan, save_scan
+from scanner.chains import UnsupportedChainError, resolve_chain
 from scanner.engine import scan_source, scan_verified
 from scanner.etherscan import SourceNotVerifiedError, UnsupportedCompilerError
 from scanner.models import ScanResult
@@ -16,25 +19,30 @@ from scanner.proxy import apply_scan_target, fetch_scan_target
 from scanner.reporting import render_markdown, render_sarif
 
 router = APIRouter(tags=["scan"])
+_SCAN_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="scan")
 
 
-@router.post("/scan")
-def create_scan(body: ScanRequest) -> dict:
-    if not body.source and not body.address:
-        raise HTTPException(status_code=400, detail="Provide source or address.")
+def _timeout_seconds() -> float:
+    try:
+        return max(1.0, float(os.getenv("SCAN_TIMEOUT_SEC", "120")))
+    except ValueError:
+        return 120.0
 
-    onchain = None
+
+def _execute_scan(body: ScanRequest) -> ScanResult:
     if body.address:
-        try:
-            target = fetch_scan_target(body.address)
-        except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Verified source lookup failed: {exc}") from exc
-        result = apply_scan_target(scan_verified(target.analyzed), target)
+        spec = resolve_chain(body.chain_id)
+        target = fetch_scan_target(body.address, chain_id=spec.id)
+        result = apply_scan_target(scan_verified(target.analyzed, network=spec.network), target)
         if body.include_onchain:
             try:
-                onchain = analyze_address(body.address, verified=True)
+                onchain = analyze_address(
+                    body.address,
+                    verified=True,
+                    rpc_url=spec.rpc_url(),
+                    network=spec.network,
+                    chain_id=spec.id,
+                )
                 if target.implementation:
                     onchain.implementation = onchain.implementation or target.implementation
                     onchain.is_proxy = True
@@ -43,9 +51,35 @@ def create_scan(body: ScanRequest) -> dict:
                 result.onchain = onchain
             except Exception:
                 result.onchain = None
-    else:
-        result = scan_source(body.source or "", filename=body.filename)
-        result.network = "Local"
+        return result
+    result = scan_source(body.source or "", filename=body.filename)
+    result.network = "Local"
+    return result
+
+
+@router.post("/scan")
+def create_scan(body: ScanRequest) -> dict:
+    if not body.source and not body.address:
+        raise HTTPException(status_code=400, detail="Provide source or address.")
+
+    try:
+        future = _SCAN_POOL.submit(_execute_scan, body)
+        result = future.result(timeout=_timeout_seconds())
+    except FuturesTimeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Scan timed out. First-time solc download can be slow; try again, or set SCAN_TIMEOUT_SEC.",
+        ) from None
+    except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except UnsupportedChainError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if body.address:
+            raise HTTPException(status_code=502, detail=f"Verified source lookup failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, result)

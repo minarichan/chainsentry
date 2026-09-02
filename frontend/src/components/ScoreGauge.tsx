@@ -37,7 +37,7 @@ export function Overview({ result, findings }: { result: ScanResult; findings?: 
         <span>Heuristic AST scan. Severity mix is the report — not a calibrated score.</span>
       </div>
       <div>
-        <h2 style={{ margin: "0 0 6px", fontSize: 28, letterSpacing: "-0.04em" }}>{name}</h2>
+        <h2 className="score-name">{name}</h2>
         <p className="muted">
           {result.address
             ? `${result.network} · Verified on-chain source`
@@ -45,11 +45,11 @@ export function Overview({ result, findings }: { result: ScanResult; findings?: 
           {result.solc_version ? ` · solc ${result.solc_version}` : ""}
           {others ? ` · ${result.contracts.length} types` : ""}
         </p>
-        {result.address ? <p className="mono muted">{result.address}</p> : null}
+        {result.address ? <p className="mono muted address-line">{result.address}</p> : null}
         {result.source_role === "implementation" && result.implementation_address ? (
           <p className="muted">
             Analyzed implementation{" "}
-            <span className="mono">{result.implementation_address}</span>
+            <span className="mono address-line">{result.implementation_address}</span>
             {result.analyzed_name ? ` (${result.analyzed_name})` : ""} behind this proxy.
           </p>
         ) : null}

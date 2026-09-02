@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from scanner.models import ScanResult
@@ -6,8 +8,12 @@ from scanner.models import ScanResult
 class ScanRequest(BaseModel):
     source: str | None = Field(default=None, description="Solidity source code")
     filename: str = "Contract.sol"
-    address: str | None = Field(default=None, description="Verified Ethereum contract address")
+    address: str | None = Field(default=None, description="Verified contract address")
     include_onchain: bool = True
+    chain_id: Literal[1, 8453, 42161] = Field(
+        default=1,
+        description="EVM chain: 1 Ethereum, 8453 Base, 42161 Arbitrum One",
+    )
 
 
 class ScanSummary(BaseModel):

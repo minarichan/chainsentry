@@ -7,7 +7,10 @@ services:
       ETHERSCAN_API_KEY: ${ETHERSCAN_API_KEY:-}
       ETHERSCAN_CHAIN_ID: ${ETHERSCAN_CHAIN_ID:-1}
       ETH_RPC_URL: ${ETH_RPC_URL:-https://eth.llamarpc.com}
+      BASE_RPC_URL: ${BASE_RPC_URL:-https://mainnet.base.org}
+      ARB_RPC_URL: ${ARB_RPC_URL:-https://arb1.arbitrum.io/rpc}
       SCAN_DB_PATH: /app/data/scans.sqlite
+      SCAN_TIMEOUT_SEC: ${SCAN_TIMEOUT_SEC:-120}
     volumes:
       - ./reports:/app/reports
       - ./data:/app/data

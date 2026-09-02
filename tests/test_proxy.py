@@ -31,7 +31,7 @@ def _verified(address: str, name: str, *, is_proxy: bool = False, implementation
 def test_follows_explorer_implementation(monkeypatch) -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: None)
 
-    def fake_fetch(address: str, api_key=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=IMPL)
         return _verified(IMPL, "Logic")
@@ -54,7 +54,7 @@ def test_follows_explorer_implementation(monkeypatch) -> None:
 def test_falls_back_when_implementation_unverified(monkeypatch) -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: None)
 
-    def fake_fetch(address: str, api_key=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=IMPL)
         raise SourceNotVerifiedError("impl not verified")
@@ -70,7 +70,7 @@ def test_no_follow_without_implementation(monkeypatch) -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: None)
     monkeypatch.setattr(
         "scanner.proxy.fetch_verified_source",
-        lambda address, api_key=None: _verified(address, "Plain"),
+        lambda address, api_key=None, chain_id=None: _verified(address, "Plain"),
     )
     target = fetch_scan_target(PROXY)
     assert target.source_role == "declared"
@@ -80,7 +80,7 @@ def test_no_follow_without_implementation(monkeypatch) -> None:
 def test_eip1967_used_when_explorer_omits_impl(monkeypatch) -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: IMPL)
 
-    def fake_fetch(address: str, api_key=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=None)
         return _verified(IMPL, "Logic")

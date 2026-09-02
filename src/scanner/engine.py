@@ -100,7 +100,7 @@ def scan_file(path: str | Path) -> ScanResult:
     return _run_detectors(compilation)
 
 
-def scan_verified(verified: VerifiedContract) -> ScanResult:
+def scan_verified(verified: VerifiedContract, *, network: str = "Ethereum Mainnet") -> ScanResult:
     sources = verified.sources or {verified.primary_file: verified.source}
     compilation = compile_sources(
         sources,
@@ -113,7 +113,7 @@ def scan_verified(verified: VerifiedContract) -> ScanResult:
     )
     result = _run_detectors(compilation)
     result.address = verified.address
-    result.network = "Ethereum Mainnet"
+    result.network = network
     result.verified = compilation.success
     return result
 

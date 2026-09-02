@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { readStoredChainId, SCAN_CHAINS, storeChainId, type ScanChainId } from "../data/chains";
 import { scanAddress, scanSource } from "../services/api";
 import type { ScanResult } from "../types/scan";
 
@@ -21,6 +22,12 @@ contract Reentrancy {
 }
 `;
 
+const SCAN_STEPS = [
+  "Fetching verified source…",
+  "Downloading solc if needed, then compiling…",
+  "Running detectors…",
+];
+
 interface Props {
   onResult: (result: ScanResult) => void;
   loadError?: string | null;
@@ -33,10 +40,23 @@ function focusAddress() {
 
 export function ScanPage({ onResult, loadError }: Props) {
   const [address, setAddress] = useState("");
+  const [chainId, setChainId] = useState<ScanChainId>(readStoredChainId);
   const [source, setSource] = useState(SAMPLE);
   const [showSource, setShowSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (!busy) {
+      setStep(0);
+      return;
+    }
+    const id = window.setInterval(() => {
+      setStep((current) => (current + 1) % SCAN_STEPS.length);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [busy]);
 
   async function run(task: () => Promise<ScanResult>) {
     setBusy(true);
@@ -57,7 +77,7 @@ export function ScanPage({ onResult, loadError }: Props) {
       setError("Provide a contract address.");
       return;
     }
-    void run(() => scanAddress(trimmed));
+    void run(() => scanAddress(trimmed, chainId));
   }
 
   function onSourceSubmit(event: FormEvent) {
@@ -77,8 +97,9 @@ export function ScanPage({ onResult, loadError }: Props) {
           <p className="kicker">Static analysis for Solidity</p>
           <h1>Security scanner for the on-chain stack</h1>
           <p className="lede">
-            Paste a verified Ethereum address. ChainSentry fetches the source,
-            compiles it, and reports reentrancy, access control, and other SWC issues.
+            Paste a verified contract address on Ethereum, Base, or Arbitrum.
+            ChainSentry fetches the source, compiles it, and reports reentrancy,
+            access control, and other SWC issues.
           </p>
           <button className="btn" type="button" onClick={focusAddress}>
             Scan a contract
@@ -87,6 +108,28 @@ export function ScanPage({ onResult, loadError }: Props) {
       </section>
 
       <form className="scan-bar" id="scan-panel" onSubmit={onAddressSubmit}>
+        <label className="scan-bar-label" htmlFor="scan-chain">
+          Chain
+        </label>
+        <select
+          id="scan-chain"
+          className="scan-bar-chain"
+          value={chainId}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            const chain = SCAN_CHAINS.find((item) => item.id === next);
+            if (!chain) return;
+            setChainId(chain.id);
+            storeChainId(chain.id);
+          }}
+        >
+          {SCAN_CHAINS.map((chain) => (
+            <option key={chain.id} value={chain.id}>
+              {chain.label}
+            </option>
+          ))}
+        </select>
+        <span className="scan-bar-split" aria-hidden="true" />
         <label className="scan-bar-label" htmlFor="contract-address">
           Contract address
         </label>
@@ -105,10 +148,9 @@ export function ScanPage({ onResult, loadError }: Props) {
         </button>
       </form>
       <p className="scan-hint">
-        Uses Sourcify (no key), then Etherscan if <span className="mono">ETHERSCAN_API_KEY</span> is
-        set in <span className="mono">.env</span>, then Blockscout. Unverified bytecode cannot be
-        fully analyzed.
+        Uses Sourcify, then Etherscan (needs a key in .env), then Blockscout — on the chain you pick.
       </p>
+      {busy ? <p className="scan-progress">{SCAN_STEPS[step]}</p> : null}
 
       {error || loadError ? <p className="stop">{error || loadError}</p> : null}
 

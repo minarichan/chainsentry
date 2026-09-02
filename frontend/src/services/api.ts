@@ -1,6 +1,7 @@
 import type { ScanResult } from "../types/scan";
 
 const API_BASE = "/api";
+const SCAN_TIMEOUT_MS = 125_000;
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -12,24 +13,34 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
-export async function scanSource(source: string, filename = "Contract.sol"): Promise<ScanResult> {
-  const response = await fetch(`${API_BASE}/scan`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source, filename, include_onchain: false }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.json();
+async function postScan(payload: Record<string, unknown>): Promise<ScanResult> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE}/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(await parseError(response));
+    return response.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Scan timed out. First solc download can take a while — try again.");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
-export async function scanAddress(address: string): Promise<ScanResult> {
-  const response = await fetch(`${API_BASE}/scan`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, include_onchain: true }),
-  });
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.json();
+export async function scanSource(source: string, filename = "Contract.sol"): Promise<ScanResult> {
+  return postScan({ source, filename, include_onchain: false });
+}
+
+export async function scanAddress(address: string, chainId = 1): Promise<ScanResult> {
+  return postScan({ address, include_onchain: true, chain_id: chainId });
 }
 
 export async function getScan(id: string): Promise<ScanResult> {

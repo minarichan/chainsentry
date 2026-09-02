@@ -7,6 +7,7 @@ from typing import Optional
 
 from web3 import Web3
 
+from scanner.chains import resolve_chain
 from scanner.etherscan import (
     SourceNotVerifiedError,
     UnsupportedCompilerError,
@@ -63,23 +64,28 @@ class ScanTarget:
     note: Optional[str] = None
 
 
-def fetch_scan_target(address: str, api_key: Optional[str] = None) -> ScanTarget:
+def fetch_scan_target(
+    address: str,
+    api_key: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> ScanTarget:
     """Fetch verified source, following a proxy to its implementation once."""
+    spec = resolve_chain(chain_id)
     requested = checksum_address(address)
-    declared = fetch_verified_source(requested, api_key=api_key)
-    impl = resolve_implementation_address(declared, requested)
+    declared = fetch_verified_source(requested, api_key=api_key, chain_id=spec.id)
+    impl = resolve_implementation_address(declared, requested, rpc_url=spec.rpc_url())
     if not impl:
         return ScanTarget(requested, declared, None, "declared")
 
     try:
-        logic = fetch_verified_source(impl, api_key=api_key)
+        logic = fetch_verified_source(impl, api_key=api_key, chain_id=spec.id)
     except UnsupportedCompilerError as exc:
         return ScanTarget(
             requested,
             declared,
             impl,
             "proxy_fallback",
-            f"Implementation {impl} is not Solidity: {exc}",
+            f"Implementation is not Solidity; scanned the proxy instead.",
         )
     except SourceNotVerifiedError as exc:
         return ScanTarget(
@@ -87,7 +93,7 @@ def fetch_scan_target(address: str, api_key: Optional[str] = None) -> ScanTarget
             declared,
             impl,
             "proxy_fallback",
-            f"Implementation {impl} is not verified; scanned proxy source instead. {exc}",
+            "Implementation is not verified; scanned the proxy instead.",
         )
     except Exception as exc:
         return ScanTarget(
@@ -95,7 +101,7 @@ def fetch_scan_target(address: str, api_key: Optional[str] = None) -> ScanTarget
             declared,
             impl,
             "proxy_fallback",
-            f"Could not fetch implementation {impl}: {exc}",
+            "Could not fetch implementation source; scanned the proxy instead.",
         )
 
     return ScanTarget(requested, logic, impl, "implementation")

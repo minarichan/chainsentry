@@ -116,23 +116,47 @@ def main() -> None:
 
 @main.command()
 @click.argument("path", required=False)
-@click.option("--address", "address", default=None, help="Ethereum contract address (verified source via Etherscan).")
+@click.option("--address", "address", default=None, help="Verified contract address (Sourcify / Etherscan / Blockscout).")
+@click.option(
+    "--chain-id",
+    "chain_id",
+    type=click.Choice(["1", "8453", "42161"]),
+    default=None,
+    help="EVM chain: 1 Ethereum, 8453 Base, 42161 Arbitrum One. Default: ETHERSCAN_CHAIN_ID or 1.",
+)
 @click.option("--format", "fmt", type=click.Choice(["console", "json", "html", "markdown", "sarif", "all"]), default="console")
 @click.option("--severity", type=click.Choice(["critical", "high", "medium", "low", "info"]), default=None)
 @click.option("--output", "output_dir", default="reports", show_default=True)
 @click.option("--fail-on", type=click.Choice(["critical", "high", "medium", "low"]), default=None, help="Exit 1 if findings at this severity or worse exist.")
-def scan(path: str | None, address: str | None, fmt: str, severity: str | None, output_dir: str, fail_on: str | None) -> None:
+def scan(
+    path: str | None,
+    address: str | None,
+    chain_id: str | None,
+    fmt: str,
+    severity: str | None,
+    output_dir: str,
+    fail_on: str | None,
+) -> None:
     """Scan a local .sol file or a verified on-chain contract."""
     onchain = None
     if address:
+        from scanner.chains import resolve_chain
+
+        spec = resolve_chain(int(chain_id) if chain_id else None)
         try:
-            target = fetch_scan_target(address)
+            target = fetch_scan_target(address, chain_id=spec.id)
         except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
             click.secho(str(exc), fg="red")
             raise SystemExit(3) from exc
-        result = apply_scan_target(scan_verified(target.analyzed), target)
+        result = apply_scan_target(scan_verified(target.analyzed, network=spec.network), target)
         try:
-            onchain = analyze_address(address, verified=True)
+            onchain = analyze_address(
+                address,
+                verified=True,
+                rpc_url=spec.rpc_url(),
+                network=spec.network,
+                chain_id=spec.id,
+            )
             if target.implementation:
                 onchain.implementation = onchain.implementation or target.implementation
                 onchain.is_proxy = True

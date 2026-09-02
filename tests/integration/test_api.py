@@ -64,3 +64,54 @@ def test_scan_persists_in_sqlite(tmp_path, monkeypatch) -> None:
     markdown = client.get(f"/scan/{scan_id}/report.md")
     assert markdown.status_code == 200
     assert "SC-TXORIGIN-001" in markdown.text
+
+
+def test_scan_timeout(monkeypatch) -> None:
+    import time
+
+    from api.routes import scan as scan_routes
+
+    monkeypatch.setenv("SCAN_TIMEOUT_SEC", "1")
+
+    def hang(_body):
+        time.sleep(8)
+        raise AssertionError("scan should have been timed out")
+
+    monkeypatch.setattr(scan_routes, "_execute_scan", hang)
+    response = client.post(
+        "/scan",
+        json={"source": "pragma solidity ^0.8.0; contract C {}", "filename": "C.sol", "include_onchain": False},
+    )
+    assert response.status_code == 504
+    assert "timed out" in response.json()["detail"].lower()
+
+
+def test_scan_rejects_unknown_chain() -> None:
+    response = client.post(
+        "/scan",
+        json={"address": "0x0000000000000000000000000000000000000001", "chain_id": 10},
+    )
+    assert response.status_code == 422
+
+
+def test_scan_passes_chain_id(monkeypatch) -> None:
+    from scanner.etherscan import SourceNotVerifiedError
+    from api.routes import scan as scan_routes
+
+    captured: dict[str, int | None] = {}
+
+    def fake_target(address, api_key=None, chain_id=None):
+        captured["chain_id"] = chain_id
+        raise SourceNotVerifiedError("nope")
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "chain_id": 8453,
+            "include_onchain": False,
+        },
+    )
+    assert response.status_code == 422
+    assert captured["chain_id"] == 8453

@@ -1,6 +1,6 @@
 # ChainSentry
 
-**Security scanner for the on-chain stack.** Paste a verified Ethereum address; ChainSentry fetches the source, compiles it with `solc`, and reports SWC-class issues with a severity mix, function attack surface, and on-chain context.
+**Security scanner for the on-chain stack.** Paste a verified address on Ethereum, Base, or Arbitrum; ChainSentry fetches the source, compiles it with `solc`, and reports SWC-class issues with a severity mix, function attack surface, and on-chain context.
 
 This is a defensive static analyzer. It reports findings and recommended fixes. It does not generate exploits, and it does not treat unverified bytecode as a full source audit.
 
@@ -89,6 +89,7 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format all
 python -m scanner scan contracts/safe/SafeReentrancy.sol --fail-on high
 
 python -m scanner scan --address 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+python -m scanner scan --chain-id 8453 --address 0x...
 python -m scanner scan contracts/example.sol --format json --output reports
 python -m scanner scan contracts/example.sol --format html
 python -m scanner scan contracts/vulnerable/Reentrancy.sol --format markdown
@@ -99,11 +100,11 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format sarif
 
 ## API
 
-- `POST /scan` — `{ "address": "0x..." }` or `{ "source": "pragma ..." }`
+- `POST /scan` — `{ "address": "0x...", "chain_id": 1 }` (`8453` Base, `42161` Arbitrum) or `{ "source": "pragma ..." }`
 - `GET /scan/{id}` — stored result
 - `GET /scan/{id}/report.md` — Markdown report
 - `GET /scan/{id}/report.sarif` — SARIF 2.1.0
-- `GET /contract/{address}` — verification + on-chain signals
+- `GET /contract/{address}?chain_id=1` — verification + on-chain signals
 - `GET /health`
 
 ## Configuration
@@ -113,8 +114,10 @@ Copy `.env.example` to `.env` (gitignored):
 | Variable | Role |
 |---|---|
 | `ETHERSCAN_API_KEY` | Etherscan V2 fallback + tx stats. Optional if Sourcify has the source. |
-| `ETHERSCAN_CHAIN_ID` | Defaults to `1` (Ethereum mainnet). |
-| `ETH_RPC_URL` | Balance, EIP-1967 proxy slots, `owner()`. Public RPC is enough for demos. |
+| `ETHERSCAN_CHAIN_ID` | CLI default when `--chain-id` is omitted. UI sends `chain_id` per scan (`1` / `8453` / `42161`). |
+| `ETH_RPC_URL` | Ethereum RPC for balance, EIP-1967 slots, `owner()`. |
+| `BASE_RPC_URL` | Base RPC (default `https://mainnet.base.org`). |
+| `ARB_RPC_URL` | Arbitrum One RPC (default `https://arb1.arbitrum.io/rpc`). |
 
 Local `.sol` scans never need a key.
 
@@ -140,6 +143,17 @@ docker compose up --build
 - API: http://localhost:8000/health
 
 The UI proxies `/api` to the API container. Stop a local uvicorn on port 8000 first if that port is already in use.
+
+## Railway
+
+One service serves the UI and API from the root `Dockerfile`. From the repo root, after `railway login`:
+
+```bash
+railway init
+railway up
+```
+
+In the Railway dashboard: set the service to **at least 1 GB RAM**, attach a volume at `/app/data`, and generate a public domain. Leave `ETHERSCAN_API_KEY` unset for a Sourcify-only public demo. Optional: `CORS_ORIGINS` (comma-separated) if the UI is hosted on a different origin.
 
 ## Layout
 

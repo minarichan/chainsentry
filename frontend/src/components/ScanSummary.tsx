@@ -22,7 +22,8 @@ function headlineContract(result: ScanResult) {
 
 export function verdictLine(result: ScanResult, findings: Finding[]): string {
   if (result.compiler_errors.length) {
-    return "Compilation failed. Detectors did not run on this source.";
+    const first = result.compiler_errors[0].split("\n")[0];
+    return first ? `Could not compile: ${first}` : "Compilation failed. Detectors did not run.";
   }
   if (!findings.length) {
     return "No issues from the current detector set.";

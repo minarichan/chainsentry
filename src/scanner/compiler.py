@@ -20,6 +20,15 @@ MISSING_SOURCE_RE = re.compile(r'Source "([^"]+)" not found')
 
 # Default compiler used when a pragma is a range (e.g. ^0.8.0).
 DEFAULT_SOLC = "0.8.20"
+# py-solc-x cannot install binaries older than this (standard-json era).
+MIN_SOLC = (0, 4, 11)
+LINE_SOLC = {
+    "0.4": "0.4.26",
+    "0.5": "0.5.17",
+    "0.6": "0.6.12",
+    "0.7": "0.7.6",
+    "0.8": DEFAULT_SOLC,
+}
 MAX_ERROR_CHARS = 1600
 
 IERC20_STUB = """\
@@ -60,6 +69,24 @@ def parse_pragma(source: str) -> Optional[str]:
     return match.group(1).strip()
 
 
+def _version_tuple(version: str) -> tuple[int, int, int]:
+    match = VERSION_RE.search(version or "")
+    if not match:
+        return (0, 0, 0)
+    parts = match.group(1).split(".")
+    return int(parts[0]), int(parts[1]), int(parts[2] if len(parts) > 2 else 0)
+
+
+def usable_solc_version(requested: str | None, source: str) -> str:
+    """Pick a py-solc-x installable solc. Explorer pins like 0.4.6 cannot be installed."""
+    raw = (requested or "").strip() or resolve_solc_version(source)
+    parsed = _version_tuple(raw)
+    if parsed >= MIN_SOLC:
+        return f"{parsed[0]}.{parsed[1]}.{parsed[2]}"
+    line = f"{parsed[0]}.{parsed[1]}"
+    return LINE_SOLC.get(line, DEFAULT_SOLC)
+
+
 def resolve_solc_version(source: str) -> str:
     """Pick an installable solc version that satisfies a simple pragma."""
     pragma = parse_pragma(source)
@@ -70,17 +97,16 @@ def resolve_solc_version(source: str) -> str:
     pinned = exact.group(1) if exact else None
 
     if pragma.startswith("=") and pinned:
-        return pinned
-    if re.fullmatch(r"\d+\.\d+\.\d+", pragma):
-        return pragma
+        return usable_solc_version(pinned, source)
+    if pinned and re.fullmatch(r"\d+\.\d+\.\d+", pragma):
+        return usable_solc_version(pinned, source)
     if pinned and pragma.startswith("^0.8"):
-        # Stay on the 0.8 line; 0.8.20 is widely available via py-solc-x.
-        major_minor = ".".join(pinned.split(".")[:2])
-        if major_minor == "0.8":
-            return DEFAULT_SOLC
-        return pinned
+        return DEFAULT_SOLC
+    if pinned and pragma.startswith("^"):
+        line = ".".join(pinned.split(".")[:2])
+        return LINE_SOLC.get(line, pinned)
     if pinned:
-        return pinned
+        return usable_solc_version(pinned, source)
     return DEFAULT_SOLC
 
 
@@ -286,12 +312,12 @@ def compile_sources(
         f"// File: {name}\n{content}" for name, content in sources.items()
     )
 
-    version = solc_version or resolve_solc_version(primary_source)
+    version = usable_solc_version(solc_version, primary_source)
     try:
         ensure_solc(version)
     except Exception as exc:  # pragma: no cover - environment/network failure
-        if solc_version:
-            fallback = resolve_solc_version(primary_source)
+        fallback = usable_solc_version(None, primary_source)
+        if fallback != version:
             try:
                 ensure_solc(fallback)
                 version = fallback
@@ -330,7 +356,8 @@ def compile_sources(
             settings["remappings"] = remaps
         if evm_version:
             settings["evmVersion"] = evm_version
-        if use_ir:
+        # viaIR exists from 0.8.13; older binaries reject the key.
+        if use_ir and _version_tuple(version) >= (0, 8, 13):
             settings["viaIR"] = True
 
         standard_input = {

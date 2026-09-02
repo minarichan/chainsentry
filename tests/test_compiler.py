@@ -13,6 +13,21 @@ def test_parse_pragma() -> None:
     assert resolve_solc_version(source) == "0.8.20"
 
 
+def test_old_04_pragma_uses_installable_solc() -> None:
+    from scanner.compiler import usable_solc_version
+
+    source = "pragma solidity ^0.4.0;\ncontract C { function f() {} }"
+    assert resolve_solc_version(source) == "0.4.26"
+    assert usable_solc_version("0.4.6", source) == "0.4.26"
+
+
+def test_compile_04_caret_pragma() -> None:
+    source = "pragma solidity ^0.4.0;\ncontract OldFour { function f() {} }"
+    result = compile_sources({"OldFour.sol": source}, filename="OldFour.sol", solc_version="0.4.6")
+    assert result.success, result.errors
+    assert result.solc_version == "0.4.26"
+
+
 def test_parse_solc_version() -> None:
     assert parse_solc_version("v0.8.20+commit.a1b79de6") == "0.8.20"
     assert parse_solc_version("0.8.19") == "0.8.19"

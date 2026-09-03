@@ -1,0 +1,68 @@
+name: ChainSentry
+description: Scan Solidity with ChainSentry and publish Markdown plus SARIF
+author: minarichan
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  path:
+    description: Solidity file or directory to scan
+    required: false
+    default: "."
+  fail-on:
+    description: Fail if findings exist at this severity or worse (critical, high, medium, low). Leave empty to never fail.
+    required: false
+    default: ""
+  comment-pr:
+    description: Post the Markdown report on pull requests
+    required: false
+    default: "true"
+  python-version:
+    description: Python version
+    required: false
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install ChainSentry
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r "${{ github.action_path }}/requirements.txt"
+        pip install "${{ github.action_path }}"
+
+    - name: Scan Solidity
+      id: scan
+      shell: bash
+      run: |
+        python "${{ github.action_path }}/action/run.py" \
+          --path "${{ inputs.path }}" \
+          --output reports \
+          --fail-on "${{ inputs.fail-on }}"
+
+    - uses: actions/upload-artifact@v4
+      if: ${{ always() }}
+      with:
+        name: chainsentry-reports
+        path: reports/
+        if-no-files-found: ignore
+
+    - uses: github/codeql-action/upload-sarif@v3
+      if: ${{ always() && hashFiles('reports/chainsentry.sarif') != '' }}
+      continue-on-error: true
+      with:
+        sarif_file: reports/chainsentry.sarif
+
+    - name: Comment on pull request
+      if: ${{ always() && inputs.comment-pr == 'true' && github.event_name == 'pull_request' && hashFiles('reports/chainsentry.md') != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr comment "${{ github.event.pull_request.number }}" --body-file reports/chainsentry.md

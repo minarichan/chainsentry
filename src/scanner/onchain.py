@@ -13,6 +13,10 @@ from scanner.models import OnChainAnalysis
 # EIP-1967 implementation slot
 IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
 ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103"
+BEACON_SLOT = "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50"
+IMPLEMENTATION_SELECTOR = "0x5c60da1b"
+EIP1167_PREFIX = bytes.fromhex("363d3d373d3d3d363d73")
+EIP1167_SUFFIX = bytes.fromhex("5af43d82803e903d91602b57fd5bf3")
 
 OWNER_ABI = [
     {
@@ -28,6 +32,54 @@ OWNER_ABI = [
 def _web3(rpc_url: Optional[str] = None, chain_id: Optional[int] = None) -> Web3:
     url = (rpc_url or "").strip() or resolve_chain(chain_id).rpc_url()
     return Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 20}))
+
+
+def parse_eip1167_implementation(code: bytes) -> Optional[str]:
+    """Return the logic address encoded in EIP-1167 minimal-proxy runtime bytecode."""
+    if not code:
+        return None
+    idx = code.find(EIP1167_PREFIX)
+    if idx < 0:
+        return None
+    start = idx + len(EIP1167_PREFIX)
+    end = start + 20
+    if end + len(EIP1167_SUFFIX) > len(code):
+        return None
+    if code[end : end + len(EIP1167_SUFFIX)] != EIP1167_SUFFIX:
+        return None
+    addr = code[start:end]
+    if int.from_bytes(addr, "big") == 0:
+        return None
+    try:
+        return Web3.to_checksum_address(addr)
+    except Exception:
+        return None
+
+
+def read_eip1167_implementation(address: str, rpc_url: Optional[str] = None) -> Optional[str]:
+    try:
+        w3 = _web3(rpc_url)
+        code = bytes(w3.eth.get_code(Web3.to_checksum_address(address)))
+        return parse_eip1167_implementation(code)
+    except Exception:
+        return None
+
+
+def read_beacon_implementation(address: str, rpc_url: Optional[str] = None) -> Optional[str]:
+    """EIP-1967 beacon slot, then implementation() on the beacon."""
+    try:
+        w3 = _web3(rpc_url)
+        checksum = Web3.to_checksum_address(address)
+        beacon = _slot_address(w3, checksum, BEACON_SLOT)
+        if not beacon:
+            return None
+        data = w3.eth.call({"to": beacon, "data": IMPLEMENTATION_SELECTOR})
+        raw = bytes(data)
+        if len(raw) < 20 or int.from_bytes(raw[-20:], "big") == 0:
+            return None
+        return Web3.to_checksum_address(raw[-20:])
+    except Exception:
+        return None
 
 
 def read_eip1967_implementation(address: str, rpc_url: Optional[str] = None) -> Optional[str]:
@@ -109,13 +161,28 @@ def analyze_address(
 
     implementation = _slot_address(w3, checksum, IMPLEMENTATION_SLOT)
     admin = _slot_address(w3, checksum, ADMIN_SLOT)
-    is_proxy = bool(implementation or admin)
-    if is_proxy:
+    beacon = _slot_address(w3, checksum, BEACON_SLOT)
+    clone = None
+    try:
+        clone = parse_eip1167_implementation(bytes(w3.eth.get_code(checksum) or b""))
+    except Exception:
+        clone = None
+    if not implementation:
+        implementation = clone or read_beacon_implementation(checksum, rpc_url=rpc_url)
+    is_proxy = bool(implementation or admin or beacon or clone)
+    if clone:
+        signals.append("Minimal proxy (EIP-1167)")
+    elif beacon:
+        signals.append("Beacon proxy")
+    elif implementation or admin:
         signals.append("Upgradeable proxy")
+    if is_proxy:
         if implementation:
             notes.append(f"Implementation: {implementation}")
         if admin:
             notes.append(f"Proxy admin: {admin}")
+        if beacon:
+            notes.append(f"Beacon: {beacon}")
 
     owner = None
     try:

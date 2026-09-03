@@ -101,6 +101,32 @@ def render_sarif(result: ScanResult) -> dict[str, Any]:
     }
 
 
+def render_sarif_many(scan_results: list[ScanResult]) -> dict[str, Any]:
+    merged: list[dict[str, Any]] = []
+    ok = True
+    for item in scan_results:
+        merged.extend(render_sarif(item)["runs"][0]["results"])
+        if item.compiler_errors:
+            ok = False
+    return {
+        "$schema": SCHEMA,
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "ChainSentry",
+                        "version": "0.1.0",
+                        "rules": _rules(),
+                    }
+                },
+                "results": merged,
+                "invocations": [{"executionSuccessful": ok}],
+            }
+        ],
+    }
+
+
 def write_sarif_report(result: ScanResult, path: str | Path) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)

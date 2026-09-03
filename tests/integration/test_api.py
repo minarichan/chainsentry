@@ -199,3 +199,80 @@ def test_scan_passes_chain_id(monkeypatch) -> None:
     )
     assert response.status_code == 422
     assert captured["chain_id"] == 8453
+
+
+def test_mute_finding_and_rescan_same_address(tmp_path, monkeypatch) -> None:
+    from api.limits import reset_limits_for_tests
+    from api.routes import scan as scan_routes
+    from scanner.models import Finding, Location, ScanResult, ScoreCard, Severity
+
+    monkeypatch.setenv("SCAN_DB_PATH", str(tmp_path / "scans.sqlite"))
+    monkeypatch.setenv("SCAN_RATE_PER_MIN", "0")
+    reset_limits_for_tests()
+
+    finding = Finding(
+        id="SC-TXORIGIN-001",
+        title="tx.origin",
+        severity=Severity.HIGH,
+        confidence=80,
+        description="uses tx.origin",
+        location=Location(file="C.sol", line=12),
+        function="withdraw",
+        recommendation="Use msg.sender",
+        classification="SWC-115",
+        contract="Vault",
+    )
+
+    def stub(_body):
+        return ScanResult(
+            contracts=[],
+            findings=[finding],
+            scorecard=ScoreCard(score=85, high=1, verdict="issues", verdict_label="Issues found"),
+            surfaces=[],
+            filename="C.sol",
+            solc_version="0.8.20",
+            source="",
+            address="0x0000000000000000000000000000000000000001",
+            chain_id=1,
+            network="Ethereum",
+        )
+
+    monkeypatch.setattr(scan_routes, "_execute_scan", stub)
+    first = client.post(
+        "/scan",
+        json={"address": "0x0000000000000000000000000000000000000001", "include_onchain": False},
+    )
+    assert first.status_code == 200
+    scan_id = first.json()["id"]
+    hit = first.json()["findings"][0]
+    assert hit["muted"] is False
+    muted = client.post(
+        f"/scan/{scan_id}/mute",
+        json={
+            "finding_id": hit["id"],
+            "contract": hit["contract"],
+            "function": hit["function"],
+            "muted": True,
+        },
+    )
+    assert muted.status_code == 200
+    assert muted.json()["findings"][0]["muted"] is True
+    assert muted.json()["high"] == 0
+    second = client.post(
+        "/scan",
+        json={"address": "0x0000000000000000000000000000000000000001", "include_onchain": False},
+    )
+    assert second.status_code == 200
+    assert second.json()["findings"][0]["muted"] is True
+    restored = client.post(
+        f"/scan/{second.json()['id']}/mute",
+        json={
+            "finding_id": hit["id"],
+            "contract": hit["contract"],
+            "function": hit["function"],
+            "muted": False,
+        },
+    )
+    assert restored.status_code == 200
+    assert restored.json()["findings"][0]["muted"] is False
+    reset_limits_for_tests()

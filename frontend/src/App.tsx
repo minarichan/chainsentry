@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import { EthMark } from "./components/EthMark";
 import { DetectorsPage } from "./pages/DetectorsPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { ReportPage } from "./pages/ReportPage";
 import { ScanPage } from "./pages/ScanPage";
 import { rememberScan } from "./data/history";
 import { getScan } from "./services/api";
 import type { ScanResult } from "./types/scan";
 
-type View = "scan" | "report" | "detectors";
+type View = "scan" | "report" | "detectors" | "history";
 
 function parseHash(): { view: View; id: string | null } {
   const path = window.location.hash.replace(/^#\/?/, "");
   if (path === "detectors") return { view: "detectors", id: null };
+  if (path === "history") return { view: "history", id: null };
   if (path === "report" || path.startsWith("report/")) {
     const id = path === "report" ? "" : path.slice("report/".length).split(/[/?#]/)[0];
     if (id) return { view: "report", id };
@@ -90,6 +92,15 @@ export default function App() {
             >
               Report
             </a>
+            {view === "history" ? (
+              <span className="nav-link active" aria-current="page">
+                History
+              </span>
+            ) : (
+              <a className="nav-link" href="#/history">
+                History
+              </a>
+            )}
             <a
               className={`nav-link ${view === "detectors" ? "active" : ""}`}
               href="#/detectors"
@@ -102,10 +113,12 @@ export default function App() {
         <main className="shell">
           {loadingReport ? (
             <p className="muted">Loading report…</p>
+          ) : view === "history" ? (
+            <HistoryPage />
           ) : view === "detectors" ? (
             <DetectorsPage />
           ) : view === "report" && result ? (
-            <ReportPage result={result} onReset={showScan} />
+            <ReportPage result={result} onReset={showScan} onResult={setResult} />
           ) : (
             <ScanPage
               loadError={loadError}

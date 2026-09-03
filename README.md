@@ -98,6 +98,37 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format sarif
 
 `--fail-on high` exits `1` if high or critical findings exist (used in CI). Unverified or unsupported compilers exit `3`.
 
+## GitHub Action
+
+Other repos can run ChainSentry on their Solidity and publish Markdown + SARIF. It does **not** scan every repository on an account — only a repo that adds this workflow.
+
+```yaml
+# .github/workflows/chainsentry.yml
+name: ChainSentry
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: minarichan/chainsentry@main
+        with:
+          path: contracts
+          fail-on: high
+          comment-pr: true
+```
+
+`path` is a file or directory (`.sol` files; `node_modules` / `lib` / `out` are skipped). Leave `fail-on` empty to report without failing the job. SARIF upload needs Code Scanning enabled; the step is allowed to fail if the repo cannot upload.
+
 ## API
 
 - `POST /scan` – `{ "address": "0x...", "chain_id": 1 }` (`8453` Base, `42161` Arbitrum) or `{ "source": "pragma ..." }`

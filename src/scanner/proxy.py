@@ -15,7 +15,11 @@ from scanner.etherscan import (
     fetch_verified_source,
 )
 from scanner.models import ScanResult
-from scanner.onchain import read_eip1967_implementation
+from scanner.onchain import (
+    read_beacon_implementation,
+    read_eip1167_implementation,
+    read_eip1967_implementation,
+)
 
 ZERO = "0x0000000000000000000000000000000000000000"
 
@@ -42,17 +46,55 @@ def resolve_implementation_address(
     *,
     rpc_url: Optional[str] = None,
 ) -> Optional[str]:
-    """One hop: Etherscan/Sourcify implementation, else EIP-1967 slot."""
+    """Explorer implementation, then EIP-1167, EIP-1967 slot, then beacon."""
     requested_cs = checksum_address(requested)
-    declared = normalize_address(verified.implementation)
-    if declared and declared.lower() != requested_cs.lower():
-        return declared
-
-    slot = read_eip1967_implementation(requested_cs, rpc_url=rpc_url)
-    slot_cs = normalize_address(slot)
-    if slot_cs and slot_cs.lower() != requested_cs.lower():
-        return slot_cs
+    candidates = [
+        normalize_address(verified.implementation),
+        read_eip1167_implementation(requested_cs, rpc_url=rpc_url),
+        read_eip1967_implementation(requested_cs, rpc_url=rpc_url),
+        read_beacon_implementation(requested_cs, rpc_url=rpc_url),
+    ]
+    for candidate in candidates:
+        if candidate and candidate.lower() != requested_cs.lower():
+            return candidate
     return None
+
+
+def _load_implementation(
+    requested: str,
+    fallback: VerifiedContract,
+    impl: str,
+    *,
+    api_key: Optional[str],
+    chain_id: int,
+) -> ScanTarget:
+    try:
+        logic = fetch_verified_source(impl, api_key=api_key, chain_id=chain_id)
+    except UnsupportedCompilerError:
+        return ScanTarget(
+            requested,
+            fallback,
+            impl,
+            "proxy_fallback",
+            "Implementation is not Solidity; scanned the proxy instead.",
+        )
+    except SourceNotVerifiedError:
+        return ScanTarget(
+            requested,
+            fallback,
+            impl,
+            "proxy_fallback",
+            "Implementation is not verified; scanned the proxy instead.",
+        )
+    except Exception:
+        return ScanTarget(
+            requested,
+            fallback,
+            impl,
+            "proxy_fallback",
+            "Could not fetch implementation source; scanned the proxy instead.",
+        )
+    return ScanTarget(requested, logic, impl, "implementation")
 
 
 @dataclass
@@ -69,42 +111,30 @@ def fetch_scan_target(
     api_key: Optional[str] = None,
     chain_id: Optional[int] = None,
 ) -> ScanTarget:
-    """Fetch verified source, following a proxy to its implementation once."""
+    """Fetch verified source, following a proxy and one extra beacon/clone hop."""
     spec = resolve_chain(chain_id)
     requested = checksum_address(address)
     declared = fetch_verified_source(requested, api_key=api_key, chain_id=spec.id)
-    impl = resolve_implementation_address(declared, requested, rpc_url=spec.rpc_url())
-    if not impl:
+    hop = resolve_implementation_address(declared, requested, rpc_url=spec.rpc_url())
+    if not hop:
         return ScanTarget(requested, declared, None, "declared")
 
-    try:
-        logic = fetch_verified_source(impl, api_key=api_key, chain_id=spec.id)
-    except UnsupportedCompilerError as exc:
-        return ScanTarget(
-            requested,
-            declared,
-            impl,
-            "proxy_fallback",
-            f"Implementation is not Solidity; scanned the proxy instead.",
-        )
-    except SourceNotVerifiedError as exc:
-        return ScanTarget(
-            requested,
-            declared,
-            impl,
-            "proxy_fallback",
-            "Implementation is not verified; scanned the proxy instead.",
-        )
-    except Exception as exc:
-        return ScanTarget(
-            requested,
-            declared,
-            impl,
-            "proxy_fallback",
-            "Could not fetch implementation source; scanned the proxy instead.",
-        )
+    target = _load_implementation(
+        requested, declared, hop, api_key=api_key, chain_id=spec.id
+    )
+    if target.source_role != "implementation":
+        return target
 
-    return ScanTarget(requested, logic, impl, "implementation")
+    extra = resolve_implementation_address(target.analyzed, hop, rpc_url=spec.rpc_url())
+    if not extra or extra.lower() in {hop.lower(), requested.lower()}:
+        return target
+
+    nested = _load_implementation(
+        requested, target.analyzed, extra, api_key=api_key, chain_id=spec.id
+    )
+    if nested.source_role == "implementation":
+        return nested
+    return target
 
 
 def apply_scan_target(result: ScanResult, target: ScanTarget) -> ScanResult:

@@ -13,6 +13,7 @@ export interface Finding {
   contract: string | null;
   snippet?: string | null;
   snippet_start_line?: number;
+  muted?: boolean;
 }
 
 export interface FunctionSurface {

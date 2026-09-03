@@ -1,4 +1,4 @@
-import type { ScanResult } from "../types/scan";
+import type { Finding, ScanResult } from "../types/scan";
 
 const API_BASE = "/api";
 const SCAN_TIMEOUT_MS = 125_000;
@@ -6,7 +6,13 @@ const SCAN_TIMEOUT_MS = 125_000;
 async function parseError(response: Response): Promise<string> {
   try {
     const body = await response.json();
-    if (typeof body.detail === "string") return body.detail.replaceAll("`", "");
+    if (typeof body.detail === "string") {
+      const detail = body.detail.replaceAll("`", "");
+      if (detail === "Internal Server Error") {
+        return "Scanner backend failed. If this is localhost, start the API on port 8000.";
+      }
+      return detail;
+    }
     return JSON.stringify(body.detail ?? body);
   } catch {
     return response.statusText;
@@ -45,6 +51,25 @@ export async function scanAddress(address: string, chainId = 1): Promise<ScanRes
 
 export async function getScan(id: string): Promise<ScanResult> {
   const response = await fetch(`${API_BASE}/scan/${id}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function setFindingMute(
+  id: string,
+  finding: Pick<Finding, "id" | "contract" | "function">,
+  muted: boolean,
+): Promise<ScanResult> {
+  const response = await fetch(`${API_BASE}/scan/${id}/mute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      finding_id: finding.id,
+      contract: finding.contract,
+      function: finding.function,
+      muted,
+    }),
+  });
   if (!response.ok) throw new Error(await parseError(response));
   return response.json();
 }

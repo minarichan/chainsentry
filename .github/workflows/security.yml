@@ -48,6 +48,20 @@ jobs:
           name: security-reports
           path: reports/
 
+  reusable-action:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          path: contracts/safe
+          fail-on: high
+          comment-pr: "false"
+
   frontend:
     runs-on: ubuntu-latest
     steps:

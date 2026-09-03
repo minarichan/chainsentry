@@ -3,7 +3,7 @@ import { FindingCard } from "../components/FindingCard";
 import { FunctionTable } from "../components/FunctionTable";
 import { ScanSummary } from "../components/ScanSummary";
 import { Overview } from "../components/ScoreGauge";
-import { downloadScanExport } from "../services/api";
+import { downloadScanExport, setFindingMute } from "../services/api";
 import type { Finding, ScanResult } from "../types/scan";
 
 function formatCompilerErrors(errors: string[]) {
@@ -23,18 +23,34 @@ function uniqueFindings(findings: Finding[]): Finding[] {
     }
     const names = [existing.contract, finding.contract].filter(Boolean);
     const merged = [...new Set(names)];
+    const next = existing;
     if (merged.length) {
-      seen.set(key, { ...existing, contract: merged.join(", ") });
+      seen.set(key, {
+        ...next,
+        contract: merged.join(", "),
+        muted: Boolean(existing.muted || finding.muted),
+      });
+    } else if (finding.muted) {
+      seen.set(key, { ...existing, muted: true });
     }
   }
   return [...seen.values()];
 }
 
-export function ReportPage({ result, onReset }: { result: ScanResult; onReset: () => void }) {
+export function ReportPage({
+  result,
+  onReset,
+  onResult,
+}: {
+  result: ScanResult;
+  onReset: () => void;
+  onResult?: (result: ScanResult) => void;
+}) {
   const [tab, setTab] = useState<"overview" | "findings" | "functions" | "onchain">("overview");
   const [exportError, setExportError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const findings = uniqueFindings(result.findings);
+  const active = findings.filter((finding) => !finding.muted);
 
   async function onExport(kind: "markdown" | "sarif") {
     setExportError(null);
@@ -42,6 +58,16 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
       await downloadScanExport(result.id, kind);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
+    }
+  }
+
+  async function onMute(finding: Finding, muted: boolean) {
+    setExportError(null);
+    try {
+      const next = await setFindingMute(result.id, finding, muted);
+      onResult?.(next);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Could not update finding");
     }
   }
 
@@ -83,7 +109,7 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
       {exportError ? <p className="stop">{exportError}</p> : null}
 
       <div className="panel">
-        <Overview result={result} findings={findings} />
+        <Overview result={result} findings={active} />
       </div>
 
       <div className="panel">
@@ -104,7 +130,7 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
 
         {tab === "overview" && (
           <div>
-            <ScanSummary result={result} findings={findings} onOpenOnchain={() => setTab("onchain")} />
+            <ScanSummary result={result} findings={active} onOpenOnchain={() => setTab("onchain")} />
             {result.compiler_errors.length > 0 && (
               <pre className="error">{formatCompilerErrors(result.compiler_errors)}</pre>
             )}
@@ -117,6 +143,7 @@ export function ReportPage({ result, onReset }: { result: ScanResult; onReset: (
               <FindingCard
                 key={`${finding.id}-${finding.contract}-${finding.location.file}-${finding.location.line}-${finding.function}`}
                 finding={finding}
+                onMute={(item, muted) => void onMute(item, muted)}
               />
             ))
           ) : (

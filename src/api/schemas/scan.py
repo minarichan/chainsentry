@@ -2,7 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from scanner.models import ScanResult
+from scanner.models import Finding, ScanResult
+from scanner.scoring import compute_score
 
 
 class ScanRequest(BaseModel):
@@ -38,10 +39,24 @@ class ScanSummary(BaseModel):
     compiler_errors: list[str]
 
 
-def result_to_summary(scan_id: str, result: ScanResult) -> dict:
+def result_to_summary(scan_id: str, result: ScanResult, muted_keys: set[str] | None = None) -> dict:
     card = result.scorecard
     payload = result.to_dict()
     payload["id"] = scan_id
+    keys = muted_keys or set()
+    for item in payload.get("findings") or []:
+        if not isinstance(item, dict):
+            continue
+        key = f"{item.get('id') or ''}|{item.get('contract') or ''}|{item.get('function') or ''}"
+        item["muted"] = key in keys
+    if keys:
+        active = [
+            Finding.from_dict(item)
+            for item in payload.get("findings") or []
+            if isinstance(item, dict) and not item.get("muted")
+        ]
+        card = compute_score(active)
+        payload["scorecard"] = card.to_dict()
     payload["score"] = card.score
     payload["score_kind"] = card.score_kind
     payload["verdict"] = card.verdict

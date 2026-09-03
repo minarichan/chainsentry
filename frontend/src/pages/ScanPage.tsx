@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChainSelect } from "../components/ChainSelect";
-import { readScanHistory } from "../data/history";
 import { readStoredChainId, storeChainId, type ScanChainId } from "../data/chains";
 import { scanAddress, scanSource } from "../services/api";
 import type { ScanResult } from "../types/scan";
@@ -55,7 +54,6 @@ export function ScanPage({ onResult, loadError }: Props) {
   const [showSource, setShowSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history] = useState(() => readScanHistory());
   const [step, setStep] = useState(0);
 
   useEffect(() => {
@@ -165,19 +163,6 @@ export function ScanPage({ onResult, loadError }: Props) {
       {busy ? <p className="scan-progress">{SCAN_STEPS[step]}</p> : null}
 
       {error || loadError ? <p className="stop">{error || loadError}</p> : null}
-
-      {history.length ? (
-        <div className="scan-history">
-          <p className="scan-history-label">This browser</p>
-          <ul>
-            {history.map((item) => (
-              <li key={item.id}>
-                <a href={`#/report/${item.id}`}>{item.label}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       <p>
         <button

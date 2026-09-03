@@ -8,9 +8,11 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from pydantic import BaseModel
+
 from api.limits import acquire_scan_slot, enforce_scan_rate, release_scan_slot
 from api.schemas.scan import ScanRequest, result_to_summary
-from api.store import load_scan, save_scan
+from api.store import finding_mute_key, list_muted_keys, load_scan, save_scan, set_muted
 from scanner.chains import UnsupportedChainError, resolve_chain
 from scanner.engine import scan_source, scan_verified
 from scanner.etherscan import SourceNotVerifiedError, UnsupportedCompilerError
@@ -52,10 +54,15 @@ def _execute_scan(body: ScanRequest) -> ScanResult:
                 result.onchain = onchain
             except Exception:
                 result.onchain = None
+        result.chain_id = spec.id
         return result
     result = scan_source(body.source or "", filename=body.filename)
     result.network = "Local"
     return result
+
+
+def _summary(scan_id: str, result: ScanResult) -> dict:
+    return result_to_summary(scan_id, result, list_muted_keys(scan_id, result))
 
 
 @router.post("/scan")
@@ -88,7 +95,7 @@ def create_scan(body: ScanRequest, request: Request) -> dict:
 
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, result)
-    return result_to_summary(scan_id, result)
+    return _summary(scan_id, result)
 
 
 @router.get("/scan/{scan_id}")
@@ -96,7 +103,14 @@ def get_scan(scan_id: str) -> dict:
     result = load_scan(scan_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Scan not found")
-    return result_to_summary(scan_id, result)
+    return _summary(scan_id, result)
+
+
+class MuteRequest(BaseModel):
+    finding_id: str
+    contract: str | None = None
+    function: str | None = None
+    muted: bool = True
 
 
 def _stored_scan(scan_id: str) -> ScanResult:
@@ -104,6 +118,24 @@ def _stored_scan(scan_id: str) -> ScanResult:
     if result is None:
         raise HTTPException(status_code=404, detail="Scan not found")
     return result
+
+
+@router.post("/scan/{scan_id}/mute")
+def mute_finding(scan_id: str, body: MuteRequest) -> dict:
+    result = _stored_scan(scan_id)
+    key = finding_mute_key(body.finding_id, body.contract, body.function)
+    match = next(
+        (
+            item
+            for item in result.findings
+            if finding_mute_key(item.id, item.contract, item.function) == key
+        ),
+        None,
+    )
+    if match is None:
+        raise HTTPException(status_code=404, detail="Finding not on this report")
+    set_muted(scan_id, result, key, body.muted)
+    return _summary(scan_id, result)
 
 
 def _export_stem(result: ScanResult) -> str:

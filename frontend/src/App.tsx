@@ -11,9 +11,10 @@ type View = "scan" | "report" | "detectors";
 function parseHash(): { view: View; id: string | null } {
   const path = window.location.hash.replace(/^#\/?/, "");
   if (path === "detectors") return { view: "detectors", id: null };
-  if (path.startsWith("report/")) {
-    const id = path.slice("report/".length).split(/[/?#]/)[0];
+  if (path === "report" || path.startsWith("report/")) {
+    const id = path === "report" ? "" : path.slice("report/".length).split(/[/?#]/)[0];
     if (id) return { view: "report", id };
+    return { view: "scan", id: null };
   }
   return { view: "scan", id: null };
 }
@@ -58,66 +59,42 @@ export default function App() {
     window.location.hash = "#/";
   }
 
-  function goDetectors() {
-    setView("detectors");
-    window.location.hash = "#/detectors";
-  }
-
-  function goReport() {
-    if (!result) return;
-    setView("report");
-    window.location.hash = `#/report/${result.id}`;
-  }
+  const reportHref = result ? `#/report/${result.id}` : "#/report";
 
   return (
     <div className="page">
       <div className="stage">
         <header className="nav">
-          <button type="button" className="logo" onClick={showScan}>
+          <a className="logo" href="#/" aria-label="ChainSentry home">
             <EthMark />
             ChainSentry
-          </button>
+          </a>
           <div className="nav-pill">
-            <button
-              type="button"
-              className={`nav-link ${view === "scan" ? "active" : ""}`}
-              onClick={showScan}
-            >
-              Scan
-            </button>
-            <button
-              type="button"
-              className={`nav-link ${view === "report" ? "active" : ""}`}
-              disabled={!result}
-              onClick={goReport}
+            {view === "scan" ? (
+              <span className="nav-link active" aria-current="page">
+                Scan
+              </span>
+            ) : (
+              <a className="nav-link" href="#/">
+                Scan
+              </a>
+            )}
+            <a
+              className={`nav-link ${view === "report" ? "active" : ""} ${result ? "" : "is-disabled"}`}
+              href={reportHref}
+              aria-disabled={!result}
+              onClick={(event) => {
+                if (!result) event.preventDefault();
+              }}
             >
               Report
-            </button>
-            <button
-              type="button"
+            </a>
+            <a
               className={`nav-link ${view === "detectors" ? "active" : ""}`}
-              onClick={goDetectors}
+              href="#/detectors"
             >
               Detectors
-            </button>
-            {result && view !== "scan" ? (
-              <button className="btn small" type="button" onClick={showScan}>
-                New scan
-              </button>
-            ) : (
-              <button
-                className="btn small"
-                type="button"
-                onClick={() => {
-                  setView("scan");
-                  window.location.hash = "#/";
-                  document.getElementById("scan-panel")?.scrollIntoView({ behavior: "smooth" });
-                  document.getElementById("contract-address")?.focus();
-                }}
-              >
-                Scan contract
-              </button>
-            )}
+            </a>
           </div>
         </header>
 

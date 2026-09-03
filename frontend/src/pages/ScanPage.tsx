@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { readStoredChainId, SCAN_CHAINS, storeChainId, type ScanChainId } from "../data/chains";
+import { ChainSelect } from "../components/ChainSelect";
+import { readStoredChainId, storeChainId, type ScanChainId } from "../data/chains";
 import { scanAddress, scanSource } from "../services/api";
 import type { ScanResult } from "../types/scan";
 
@@ -33,15 +34,23 @@ interface Props {
   loadError?: string | null;
 }
 
-function focusAddress() {
-  document.getElementById("scan-panel")?.scrollIntoView({ behavior: "smooth" });
-  document.getElementById("contract-address")?.focus();
+export function focusScanField() {
+  const panel = document.getElementById("scan-panel");
+  const field = document.getElementById("contract-address");
+  panel?.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => field?.focus(), 350);
+}
+
+function looksLikeSolidity(source: string): boolean {
+  const text = source.trim();
+  if (!text) return false;
+  return /\bpragma\s+solidity\b/i.test(text) || /\bcontract\s+[A-Za-z_]/.test(text);
 }
 
 export function ScanPage({ onResult, loadError }: Props) {
   const [address, setAddress] = useState("");
   const [chainId, setChainId] = useState<ScanChainId>(readStoredChainId);
-  const [source, setSource] = useState(SAMPLE);
+  const [source, setSource] = useState("");
   const [showSource, setShowSource] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +66,15 @@ export function ScanPage({ onResult, loadError }: Props) {
     }, 4000);
     return () => window.clearInterval(id);
   }, [busy]);
+
+  useEffect(() => {
+    function onHash() {
+      if (window.location.hash === "#scan-panel") focusScanField();
+    }
+    window.addEventListener("hashchange", onHash);
+    onHash();
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   async function run(task: () => Promise<ScanResult>) {
     setBusy(true);
@@ -87,6 +105,10 @@ export function ScanPage({ onResult, loadError }: Props) {
       setError("Provide Solidity source.");
       return;
     }
+    if (!looksLikeSolidity(trimmed)) {
+      setError("This does not look like Solidity. Include a pragma or a contract definition.");
+      return;
+    }
     void run(() => scanSource(trimmed, "Contract.sol"));
   }
 
@@ -101,9 +123,6 @@ export function ScanPage({ onResult, loadError }: Props) {
             ChainSentry fetches the source, compiles it, and reports reentrancy,
             access control, and other SWC issues.
           </p>
-          <button className="btn" type="button" onClick={focusAddress}>
-            Scan a contract
-          </button>
         </div>
       </section>
 
@@ -111,24 +130,15 @@ export function ScanPage({ onResult, loadError }: Props) {
         <label className="scan-bar-label" htmlFor="scan-chain">
           Chain
         </label>
-        <select
+        <ChainSelect
           id="scan-chain"
-          className="scan-bar-chain"
           value={chainId}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            const chain = SCAN_CHAINS.find((item) => item.id === next);
-            if (!chain) return;
-            setChainId(chain.id);
-            storeChainId(chain.id);
+          disabled={busy}
+          onChange={(next) => {
+            setChainId(next);
+            storeChainId(next);
           }}
-        >
-          {SCAN_CHAINS.map((chain) => (
-            <option key={chain.id} value={chain.id}>
-              {chain.label}
-            </option>
-          ))}
-        </select>
+        />
         <span className="scan-bar-split" aria-hidden="true" />
         <label className="scan-bar-label" htmlFor="contract-address">
           Contract address
@@ -143,7 +153,7 @@ export function ScanPage({ onResult, loadError }: Props) {
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
-        <button className="btn" disabled={busy} type="submit">
+        <button className="btn" disabled={busy} type="submit" aria-label="Scan this address">
           {busy && !showSource ? "Scanning…" : "Scan"}
         </button>
       </form>
@@ -175,11 +185,26 @@ export function ScanPage({ onResult, loadError }: Props) {
           </div>
           <label>
             Solidity source
-            <textarea value={source} onChange={(e) => setSource(e.target.value)} spellCheck={false} />
+            <textarea
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              spellCheck={false}
+              placeholder={"pragma solidity ^0.8.0;\n\ncontract Example {}"}
+            />
           </label>
           <div className="row" style={{ marginTop: 16 }}>
             <button className="btn" disabled={busy} type="submit">
               {busy ? "Scanning…" : "Scan source"}
+            </button>
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => {
+                setSource(SAMPLE);
+                setError(null);
+              }}
+            >
+              Load example
             </button>
           </div>
         </form>

@@ -10,6 +10,13 @@ def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.headers["strict-transport-security"].startswith("max-age=")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "strict-origin-when-cross-origin" in response.headers["referrer-policy"]
+    csp = response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in csp
+    assert "default-src 'self'" in csp
 
 
 def test_scan_requires_input() -> None:

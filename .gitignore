@@ -52,3 +52,6 @@ data/*.db
 
 # Docker
 *.log
+
+# QA exports
+.qa-audit/

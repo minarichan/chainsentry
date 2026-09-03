@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import function_has_modifier, is_selfdestruct_call, walk
-from scanner.detectors.access_control import ACCESS_MODIFIERS
+from scanner.ast_utils import is_selfdestruct_call, walk
+from scanner.detectors.access_control import function_has_access_control
 from scanner.models import Contract, Finding, Severity
 
 
@@ -17,7 +17,7 @@ class SelfdestructDetector:
             for node in walk(fn.ast):
                 if not is_selfdestruct_call(node):
                     continue
-                protected = function_has_modifier(fn.ast, ACCESS_MODIFIERS)
+                protected = function_has_access_control(fn.ast)
                 findings.append(
                     Finding(
                         id=self.id,

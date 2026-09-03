@@ -6,6 +6,7 @@ from scanner.ast_utils import is_block_member, walk
 from scanner.models import Contract, Finding, Severity
 
 WEAK_MEMBERS = {"timestamp", "difficulty", "number", "prevrandao", "coinbase", "gaslimit"}
+HASH_SYMBOLS = {"keccak256", "sha256", "ripemd160", "abi.encodepacked"}
 
 
 def _is_weak_source(node: dict) -> bool:
@@ -21,17 +22,47 @@ def _is_weak_source(node: dict) -> bool:
     return False
 
 
-def _rng_node(hits: list[dict], fn_ast: dict) -> dict:
-    """Prefer the block attribute mixed into keccak / encodePacked, not an earlier hit."""
+def _call_symbol(node: dict) -> str:
+    expr = node.get("expression") or {}
+    if expr.get("nodeType") == "Identifier":
+        return str(expr.get("name") or "").lower()
+    if expr.get("nodeType") == "MemberAccess":
+        base = expr.get("expression") or {}
+        member = str(expr.get("memberName") or "").lower()
+        if str(base.get("name") or "").lower() == "abi":
+            return f"abi.{member}"
+        return member
+    return ""
+
+
+def _contains(root: dict, target: dict) -> bool:
+    return root is target or any(child is target for child in walk(root))
+
+
+def _entropy_mix_nodes(fn_ast: dict, hits: list[dict]) -> list[dict]:
+    """Hash / modulo nodes that actually consume a weak block attribute."""
+    mixed: list[dict] = []
     for node in walk(fn_ast):
-        if node.get("nodeType") != "FunctionCall":
+        ntype = node.get("nodeType")
+        consumes = False
+        if ntype == "FunctionCall" and _call_symbol(node) in HASH_SYMBOLS:
+            consumes = True
+        elif ntype == "BinaryOperation" and node.get("operator") == "%":
+            consumes = True
+        if not consumes:
             continue
-        name = (node.get("expression") or {}).get("name")
-        if name not in {"keccak256", "sha256", "abi.encodePacked"}:
-            continue
-        for hit in hits:
-            if hit is node or any(child is hit for child in walk(node)):
-                return hit
+        if any(_contains(node, hit) for hit in hits):
+            mixed.append(node)
+    return mixed
+
+
+def _rng_node(mix_nodes: list[dict], hits: list[dict]) -> dict:
+    """Highlight keccak / encodePacked (or modulo), not an earlier timestamp check."""
+    for node in mix_nodes:
+        if node.get("nodeType") == "FunctionCall" and _call_symbol(node) in HASH_SYMBOLS:
+            return node
+    if mix_nodes:
+        return mix_nodes[0]
     return hits[0]
 
 
@@ -43,21 +74,12 @@ class RandomnessDetector:
         findings: list[Finding] = []
         for fn in contract.functions:
             hits = [n for n in walk(fn.ast) if _is_weak_source(n)]
-            # Only flag when the value is mixed into arithmetic / keccak — typical RNG pattern.
-            uses_hash = any(
-                n.get("nodeType") == "FunctionCall"
-                and (n.get("expression") or {}).get("name") in {"keccak256", "sha256", "abi.encodePacked"}
-                for n in walk(fn.ast)
-            )
-            uses_modulo = any(
-                n.get("nodeType") == "BinaryOperation" and n.get("operator") == "%"
-                for n in walk(fn.ast)
-            )
             if not hits:
                 continue
-            if not (uses_hash or uses_modulo):
+            mix_nodes = _entropy_mix_nodes(fn.ast, hits)
+            if not mix_nodes:
                 continue
-            node = _rng_node(hits, fn.ast)
+            node = _rng_node(mix_nodes, hits)
             findings.append(
                 Finding(
                     id=self.id,

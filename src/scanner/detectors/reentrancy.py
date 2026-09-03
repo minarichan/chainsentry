@@ -7,9 +7,10 @@ from scanner.ast_utils import (
     function_has_modifier,
     node_offset,
     reentrancy_call_kind,
-    storage_names_referenced,
     walk,
 )
+from scanner.detectors.access_control import function_has_access_control
+from scanner.detectors.initializer import INITIALIZER_MODIFIERS
 from scanner.models import Contract, Finding, Function, Severity
 
 REENTRANCY_GUARDS = {
@@ -96,6 +97,10 @@ def _mutable_storage(contract: Contract) -> set[str]:
     }
 
 
+_SETUP_FNS = {"initialize", "init", "reinitialize"}
+_CIRCUIT_BREAKER_FNS = {"pause", "unpause"}
+
+
 def _calls_and_writes(
     fn: Function, storage: set[str]
 ) -> tuple[list[tuple[int, str, dict]], list[tuple[int, str, dict]]]:
@@ -109,6 +114,48 @@ def _calls_and_writes(
         if name and name in storage:
             writes.append((node_offset(node), name, node))
     return calls, writes
+
+
+def _is_getter_kind(kind: str) -> bool:
+    """View-style method names; a reentrant attacker does not enter through these."""
+    if kind in {"call", "delegatecall", "send", "transfer"}:
+        return False
+    name = kind.replace("_", "")
+    lowered = name.lower()
+    if lowered in {"balanceof", "allowance", "ownerof", "totalsupply", "code", "supportsinterface"}:
+        return True
+    for prefix in ("get", "has", "is"):
+        if name.startswith(prefix) and (len(name) == len(prefix) or name[len(prefix)].isupper()):
+            return True
+    return False
+
+
+def _setup_or_admin_fn(fn: Function) -> bool:
+    key = fn.name.lower().replace("_", "")
+    if key in _SETUP_FNS or key.startswith("initialize"):
+        return True
+    if key in _CIRCUIT_BREAKER_FNS:
+        return True
+    if function_has_access_control(fn.ast):
+        return True
+    if function_has_modifier(fn.ast, INITIALIZER_MODIFIERS):
+        return True
+    return False
+
+
+def _storage_read_before(fn: Function, storage: set[str], call_off: int, call_node: dict) -> set[str]:
+    """State reads that happen before `call_node`, excluding the callee expression itself."""
+    inside_call = {id(node) for node in walk(call_node)}
+    found: set[str] = set()
+    for node in walk(fn.ast):
+        if node.get("nodeType") != "Identifier":
+            continue
+        if id(node) in inside_call or node_offset(node) >= call_off:
+            continue
+        name = node.get("name")
+        if name in storage:
+            found.add(str(name))
+    return found
 
 
 class CrossFunctionReentrancyDetector:
@@ -132,19 +179,15 @@ class CrossFunctionReentrancyDetector:
 
         for fn in callable_fns:
             calls, writes = _calls_and_writes(fn, storage)
-            if not calls:
+            reenter_calls = [item for item in calls if not _is_getter_kind(item[1])]
+            if not reenter_calls:
                 continue
             if any(write_off > call_off for call_off, _, _ in calls for write_off, _, _ in writes):
                 continue
 
-            call_off, kind, call_node = min(calls, key=lambda item: item[0])
+            call_off, kind, call_node = min(reenter_calls, key=lambda item: item[0])
             written_before = {name for off, name, _ in writes if off < call_off}
-            read_before: set[str] = set()
-            for node in walk(fn.ast):
-                if node_offset(node) >= call_off:
-                    continue
-                read_before |= storage_names_referenced(node, storage)
-            stale = read_before - written_before
+            stale = _storage_read_before(fn, storage, call_off, call_node) - written_before
             if not stale:
                 continue
 
@@ -152,6 +195,8 @@ class CrossFunctionReentrancyDetector:
             fn_guarded = function_has_modifier(fn.ast, REENTRANCY_GUARDS)
             for other in callable_fns:
                 if other is fn or other.name == fn.name:
+                    continue
+                if _setup_or_admin_fn(other):
                     continue
                 if fn_guarded and function_has_modifier(other.ast, REENTRANCY_GUARDS):
                     continue

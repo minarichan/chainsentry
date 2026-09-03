@@ -14,6 +14,7 @@ from scanner.parser import (
     is_analyzable_kind,
     is_inherited_base,
     parse_compilation,
+    select_analysis_contracts,
 )
 from scanner.scoring import compute_score, failed_scorecard
 from scanner.snippets import attach_snippets
@@ -84,12 +85,20 @@ def _collapse_overlaps(findings: list[Finding]) -> list[Finding]:
     return kept
 
 
-def _run_detectors(compilation: CompilationResult) -> ScanResult:
-    contracts = parse_compilation(compilation)
+def _run_detectors(
+    compilation: CompilationResult,
+    *,
+    target_name: str | None = None,
+    primary_file: str | None = None,
+) -> ScanResult:
+    parsed = parse_compilation(compilation)
+    contracts = select_analysis_contracts(
+        parsed, target_name=target_name, primary_file=primary_file
+    )
     findings: list[Finding] = []
     surfaces = []
     detectors = all_detectors()
-    base_ids = inherited_base_ids(contracts)
+    base_ids = inherited_base_ids(parsed)
 
     for contract in contracts:
         if not is_analyzable_kind(contract.kind):
@@ -154,7 +163,11 @@ def scan_verified(verified: VerifiedContract, *, network: str = "Ethereum Mainne
         evm_version=verified.evm_version,
         via_ir=bool(verified.via_ir),
     )
-    result = _run_detectors(compilation)
+    result = _run_detectors(
+        compilation,
+        target_name=verified.name,
+        primary_file=verified.primary_file,
+    )
     result.address = verified.address
     result.network = network
     result.verified = compilation.success

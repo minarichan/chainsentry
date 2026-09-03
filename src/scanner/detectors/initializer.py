@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from scanner.ast_utils import function_has_modifier, has_msg_sender_check, identifier_name, walk
-from scanner.detectors.access_control import ACCESS_MODIFIERS
+from scanner.detectors.access_control import function_has_access_control
 from scanner.models import Contract, Finding, Severity
 
 INITIALIZER_MODIFIERS = {"initializer", "reinitializer", "onlyinitializing"}
@@ -40,7 +40,7 @@ class InitializerDetector:
                 continue
             if fn.name.lower().replace("_", "") != "initialize":
                 continue
-            if function_has_modifier(fn.ast, ACCESS_MODIFIERS | INITIALIZER_MODIFIERS):
+            if function_has_access_control(fn.ast) or function_has_modifier(fn.ast, INITIALIZER_MODIFIERS):
                 continue
             if has_msg_sender_check(fn.ast):
                 continue

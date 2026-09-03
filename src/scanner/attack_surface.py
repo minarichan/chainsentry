@@ -10,7 +10,7 @@ from scanner.ast_utils import (
     reentrancy_call_kind,
     walk,
 )
-from scanner.detectors.access_control import ACCESS_MODIFIERS
+from scanner.detectors.access_control import function_has_access_control
 from scanner.detectors.reentrancy import REENTRANCY_GUARDS
 from scanner.models import Contract, Function, FunctionSurface
 from scanner.parser import is_analyzable_kind
@@ -37,7 +37,7 @@ def analyze_function(contract: Contract, fn: Function) -> FunctionSurface:
     has_external_call = bool(kinds)
     sends_eth = bool({low_level_call_kind(n) for n in walk(fn.ast)} & {"call", "send", "transfer"})
     has_guard = function_has_modifier(fn.ast, REENTRANCY_GUARDS)
-    has_acl = function_has_modifier(fn.ast, ACCESS_MODIFIERS) or has_msg_sender_check(fn.ast)
+    has_acl = function_has_access_control(fn.ast) or has_msg_sender_check(fn.ast)
     modifies = _modifies_state(contract, fn)
     payable = fn.mutability == "payable"
 

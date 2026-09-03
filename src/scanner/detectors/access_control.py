@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import function_has_modifier, has_msg_sender_check, is_selfdestruct_call, walk
+from scanner.ast_utils import has_msg_sender_check, is_selfdestruct_call, type_name, walk
 from scanner.models import Contract, Finding, Function, Severity
 
 ACCESS_MODIFIERS = {
@@ -11,12 +11,49 @@ ACCESS_MODIFIERS = {
     "onlyrole",
     "onlygovernance",
     "onlyminter",
+    "onlymanager",
+    "onlykeeper",
+    "onlyoperator",
+    "onlyguardian",
+    "onlygov",
+    "onlypauser",
     "restricted",
     "auth",
     "authorised",
     "authorized",
     "onlyprivileged",
 }
+
+# `onlyInitializing` / `onlyProxy` are OZ lifecycle gates, not caller roles.
+_LIFECYCLE_ONLY_MODIFIERS = {
+    "onlyinitializing",
+    "onlyinitializer",
+    "onlyproxy",
+    "onlydelegatecall",
+    "onlyonce",
+    "onlybeacon",
+}
+
+
+def modifier_is_access_control(name: str) -> bool:
+    key = name.lower().replace("_", "")
+    if not key or key in _LIFECYCLE_ONLY_MODIFIERS:
+        return False
+    if key in ACCESS_MODIFIERS:
+        return True
+    if key.startswith("only") and len(key) > 4:
+        return True
+    return "authorised" in key or "authorized" in key or key.endswith("auth")
+
+
+def function_has_access_control(fn_ast: dict) -> bool:
+    for modifier in fn_ast.get("modifiers") or []:
+        name_node = modifier.get("modifierName") or {}
+        name = name_node.get("name") or type_name(name_node)
+        if modifier_is_access_control(str(name)):
+            return True
+    return False
+
 
 # Names that are privileged in typical admin surfaces. `mint` / `burn` are NOT
 # here: AMMs and ERC-721 collections expose them publicly on purpose.
@@ -80,7 +117,7 @@ class AccessControlDetector:
                 continue
             if fn.visibility not in {"public", "external"}:
                 continue
-            if function_has_modifier(fn.ast, ACCESS_MODIFIERS):
+            if function_has_access_control(fn.ast):
                 continue
             if has_msg_sender_check(fn.ast):
                 continue

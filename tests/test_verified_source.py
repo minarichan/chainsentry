@@ -125,3 +125,66 @@ def test_etherscan_hourly_cap_skips_to_blockscout(monkeypatch) -> None:
     got = fetch_verified_source("0x0000000000000000000000000000000000000001")
     assert got.name == "FromBlockscout"
     reset_etherscan_budget_for_tests()
+
+
+def test_scan_verified_ignores_extra_contracts_in_metadata() -> None:
+    from scanner.engine import scan_verified
+
+    factory = """pragma solidity ^0.8.0;
+contract Factory {
+    address public owner;
+    constructor() { owner = msg.sender; }
+    function setOwner(address next) external {
+        require(msg.sender == owner, "not owner");
+        owner = next;
+    }
+}
+"""
+    token = """pragma solidity ^0.8.0;
+contract TestERC20 {
+    mapping(address => uint256) public balanceOf;
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+}
+"""
+    verified = VerifiedContract(
+        address="0x1111111111111111111111111111111111111111",
+        name="Factory",
+        source=factory,
+        compiler_version="v0.8.20+commit.a1b79de6",
+        solc_version="0.8.20",
+        verified=True,
+        sources={
+            "contracts/Factory.sol": factory,
+            "contracts/test/TestERC20.sol": token,
+        },
+        primary_file="contracts/Factory.sol",
+    )
+    result = scan_verified(verified)
+    assert {c.name for c in result.contracts} == {"Factory"}
+    assert "SC-ACCESS-001" not in {f.id for f in result.findings}
+
+
+def test_scan_verified_still_analyzes_inherited_methods() -> None:
+    from pathlib import Path
+
+    from scanner.engine import scan_verified
+
+    source = (Path(__file__).resolve().parents[1] / "contracts" / "vulnerable" / "InheritedReentrancy.sol").read_text(
+        encoding="utf-8"
+    )
+    verified = VerifiedContract(
+        address="0x1111111111111111111111111111111111111112",
+        name="InheritedReentrancy",
+        source=source,
+        compiler_version="v0.8.20+commit.a1b79de6",
+        solc_version="0.8.20",
+        verified=True,
+        sources={"InheritedReentrancy.sol": source},
+        primary_file="InheritedReentrancy.sol",
+    )
+    result = scan_verified(verified)
+    hits = [f for f in result.findings if f.id == "SC-REENTRANCY-001"]
+    assert len(hits) == 1
+    assert hits[0].function == "withdraw"

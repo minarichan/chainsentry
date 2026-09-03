@@ -32,7 +32,7 @@ def test_randomness_highlights_the_entropy_line() -> None:
     hit = next(f for f in result.findings if f.id == "SC-RANDOMNESS-001")
     source = (CONTRACTS / "vulnerable" / "Randomness.sol").read_text(encoding="utf-8")
     line = source.splitlines()[hit.location.line - 1]
-    assert any(token in line for token in ("keccak256", "timestamp", "difficulty", "blockhash"))
+    assert "keccak256" in line
     assert "function enter" not in (hit.snippet or "")
 
 

@@ -65,6 +65,89 @@ def test_safe_access_control_no_false_positive() -> None:
     assert "SC-ACCESS-001" not in _ids(SAFE / "SafeAccessControl.sol")
 
 
+def test_custom_only_role_not_flagged() -> None:
+    from scanner.engine import scan_source
+
+    source = """pragma solidity ^0.8.0;
+contract GatedPause {
+    address public manager;
+    modifier onlyManager() {
+        require(msg.sender == manager, "not manager");
+        _;
+    }
+    function pause() external onlyManager {}
+    function unpause() external onlyManager {}
+}
+"""
+    ids = {f.id for f in scan_source(source, filename="GatedPause.sol").findings}
+    assert "SC-ACCESS-001" not in ids
+
+
+def test_signature_keccak_not_randomness() -> None:
+    from scanner.engine import scan_source
+
+    source = """pragma solidity ^0.8.0;
+contract Delegatable {
+    mapping(address => uint256) public nonces;
+    function setDelegateWithSignature(address delegate, uint256 expiry, bytes calldata) external {
+        if (block.timestamp > expiry) revert();
+        bytes32 digest = keccak256(abi.encodePacked(msg.sender, delegate, nonces[msg.sender], expiry));
+        nonces[msg.sender] += 1;
+        digest;
+    }
+}
+"""
+    ids = {f.id for f in scan_source(source, filename="Delegatable.sol").findings}
+    assert "SC-RANDOMNESS-001" not in ids
+
+
+def test_randomness_highlights_keccak_not_deadline() -> None:
+    from scanner.engine import scan_source
+
+    source = """pragma solidity ^0.8.0;
+contract Lottery {
+    address[] public players;
+    function pickWinner(uint256 expiry) external {
+        require(block.timestamp <= expiry, "expired");
+        uint256 index = uint256(keccak256(abi.encodePacked(block.timestamp, players.length))) % players.length;
+        payable(players[index]).transfer(address(this).balance);
+    }
+    receive() external payable {}
+}
+"""
+    result = scan_source(source, filename="Lottery.sol")
+    hit = next(f for f in result.findings if f.id == "SC-RANDOMNESS-001")
+    line = source.splitlines()[hit.location.line - 1]
+    assert "keccak256" in line
+    assert "expiry" not in line
+
+
+def test_registry_and_pause_not_cross_function_reentrancy() -> None:
+    from scanner.engine import scan_source
+
+    source = """pragma solidity ^0.8.0;
+interface IReg { function getContractAddress(string calldata k) external returns (address); }
+interface IStore { function getOpenTrade(address a) external returns (uint256); }
+contract Trading {
+    IReg public registry;
+    IStore public storageT;
+    bool public isPaused;
+    function initialize(IReg r, IStore s) public { registry = r; storageT = s; }
+    function pause() public { isPaused = true; }
+    function openTrade() public {
+        address pair = registry.getContractAddress("pair");
+        require(pair != address(0));
+    }
+    function updateSl() public {
+        uint256 id = storageT.getOpenTrade(msg.sender);
+        require(id != 0);
+    }
+}
+"""
+    ids = {f.id for f in scan_source(source, filename="Trading.sol").findings}
+    assert "SC-REENTRANCY-002" not in ids
+
+
 def test_amm_mint_not_flagged() -> None:
     assert "SC-ACCESS-001" not in _ids(SAFE / "AmmMint.sol")
 

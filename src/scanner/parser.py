@@ -163,6 +163,41 @@ def is_inherited_base(contract: Contract, base_ids: set[int]) -> bool:
     return cid is not None and cid in base_ids
 
 
+def _norm_source_path(path: str) -> str:
+    return path.replace("\\", "/").lower().lstrip("./")
+
+
+def select_analysis_contracts(
+    contracts: list[Contract],
+    *,
+    target_name: str | None = None,
+    primary_file: str | None = None,
+) -> list[Contract]:
+    """Address scans: keep the verified compilation target, not tests/forks in the same metadata."""
+    name = (target_name or "").strip()
+    if not name:
+        return contracts
+
+    named = [c for c in contracts if c.name == name]
+    if not named:
+        lowered = name.lower()
+        named = [c for c in contracts if c.name.lower() == lowered]
+    if not named and primary_file:
+        primary = _norm_source_path(primary_file)
+        named = [c for c in contracts if _norm_source_path(c.filename) == primary]
+    if not named:
+        return contracts
+    if len(named) == 1 or not primary_file:
+        return named
+
+    primary = _norm_source_path(primary_file)
+    in_primary = [c for c in named if _norm_source_path(c.filename) == primary]
+    if in_primary:
+        return in_primary
+    suffixed = [c for c in named if _norm_source_path(c.filename).endswith("/" + primary)]
+    return suffixed or named
+
+
 def _bases_to_inherit(contract: Contract, by_id: dict[int, Contract], by_name: dict[str, Contract]) -> list[Contract]:
     self_id = contract_ast_id(contract)
     ordered: list[Contract] = []

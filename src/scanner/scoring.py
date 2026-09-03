@@ -18,6 +18,7 @@ CATEGORY_BY_ID = {
     "SC-ACCESS-001": "Access Control",
     "SC-TXORIGIN-001": "Access Control",
     "SC-REENTRANCY-001": "Reentrancy",
+    "SC-REENTRANCY-002": "Reentrancy",
     "SC-UNCHECKED-001": "External Calls",
     "SC-DELEGATECALL-001": "External Calls",
     "SC-SELFDESTRUCT-001": "External Calls",

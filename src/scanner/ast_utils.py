@@ -200,6 +200,20 @@ def is_selfdestruct_call(node: Node) -> bool:
     }
 
 
+def storage_names_referenced(root: Any, storage: set[str]) -> set[str]:
+    """State variable names that appear as identifiers under `root`."""
+    found: set[str] = set()
+    if not storage:
+        return found
+    for node in walk(root):
+        if node.get("nodeType") != "Identifier":
+            continue
+        name = node.get("name")
+        if name in storage:
+            found.add(str(name))
+    return found
+
+
 def assignment_base_name(node: Node) -> Optional[str]:
     """Name of the storage identifier being written, if any."""
     if node.get("nodeType") not in {"Assignment", "UnaryOperation"}:

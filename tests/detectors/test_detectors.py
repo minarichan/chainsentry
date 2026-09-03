@@ -15,10 +15,13 @@ def _ids(path: Path) -> set[str]:
 
 def test_reentrancy_detected() -> None:
     assert "SC-REENTRANCY-001" in _ids(VULN / "Reentrancy.sol")
+    assert "SC-REENTRANCY-002" not in _ids(VULN / "Reentrancy.sol")
 
 
 def test_safe_reentrancy_no_false_positive() -> None:
-    assert "SC-REENTRANCY-001" not in _ids(SAFE / "SafeReentrancy.sol")
+    ids = _ids(SAFE / "SafeReentrancy.sol")
+    assert "SC-REENTRANCY-001" not in ids
+    assert "SC-REENTRANCY-002" not in ids
 
 
 def test_tx_origin_detected() -> None:
@@ -63,6 +66,45 @@ def test_token_reentrancy_detected() -> None:
 
 def test_safe_token_reentrancy_no_false_positive() -> None:
     assert "SC-REENTRANCY-001" not in _ids(SAFE / "SafeTokenReentrancy.sol")
+
+
+def test_cross_function_reentrancy_detected() -> None:
+    result = scan_file(VULN / "CrossFunctionReentrancy.sol")
+    ids = {f.id for f in result.findings}
+    assert "SC-REENTRANCY-002" in ids
+    assert "SC-REENTRANCY-001" not in ids
+    hit = next(f for f in result.findings if f.id == "SC-REENTRANCY-002")
+    assert hit.function == "harvest"
+    assert "claim()" in hit.description
+
+
+def test_safe_cross_function_reentrancy_no_false_positive() -> None:
+    ids = _ids(SAFE / "SafeCrossFunctionReentrancy.sol")
+    assert "SC-REENTRANCY-002" not in ids
+    assert "SC-REENTRANCY-001" not in ids
+
+
+def test_inherited_storage_reentrancy_detected() -> None:
+    result = scan_file(VULN / "InheritedReentrancy.sol")
+    hits = [f for f in result.findings if f.id == "SC-REENTRANCY-001"]
+    assert len(hits) == 1
+    assert hits[0].contract == "InheritedReentrancy"
+    assert hits[0].function == "withdraw"
+    assert not any(s.contract == "VaultStorage" and s.name == "withdraw" for s in result.surfaces)
+
+
+def test_inherited_base_body_not_double_reported() -> None:
+    result = scan_file(VULN / "InheritedBaseReentrancy.sol")
+    hits = [f for f in result.findings if f.id == "SC-REENTRANCY-001"]
+    assert len(hits) == 1
+    assert hits[0].contract == "ChildReentrancy"
+    assert hits[0].function == "withdraw"
+
+
+def test_safe_inherited_reentrancy_no_false_positive() -> None:
+    ids = _ids(SAFE / "SafeInheritedReentrancy.sol")
+    assert "SC-REENTRANCY-001" not in ids
+    assert "SC-REENTRANCY-002" not in ids
 
 
 def test_interface_not_on_attack_surface() -> None:

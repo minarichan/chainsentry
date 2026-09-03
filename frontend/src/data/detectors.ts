@@ -6,6 +6,12 @@ export const DETECTORS = [
     summary: "Flags low-level and high-level external calls that happen before storage is updated (checks-effects-interactions).",
   },
   {
+    id: "SC-REENTRANCY-002",
+    swc: "SWC-107",
+    title: "Cross-function reentrancy",
+    summary: "Flags an external call while storage already read is still stale, when another public function can write that state in the same transaction.",
+  },
+  {
     id: "SC-ACCESS-001",
     swc: "SWC-105",
     title: "Missing access control",

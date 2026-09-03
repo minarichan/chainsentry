@@ -14,7 +14,7 @@ Address-first in the dashboard: enter `0x…`, get a report. You can still paste
 |---|---|
 | Source | Sourcify (no key), then Etherscan V2 if `ETHERSCAN_API_KEY` is set, then Blockscout. Proxies: one hop to the implementation. |
 | Compile | Multi-file `solc` with the verified compiler version, optimizer / `viaIR` / runs from the explorer, Foundry remappings, `viaIR` retry on “stack too deep”. Library paths such as OpenZeppelin are skipped in analysis. |
-| Detect | One detector module per vulnerability class, shared `Finding` model. Duplicate hits across files are collapsed. |
+| Detect | One detector module per vulnerability class. Inherited members are analyzed on the most-derived contract so the same body is not reported twice. Duplicate hits across files are collapsed. |
 | Report | Verdict from severity mix (heuristic, not a 0–100 rating), plus per-function attack surface. |
 | Report | Console, JSON, HTML, Markdown, SARIF, or the React dashboard (overview, findings, functions, on-chain snapshot). |
 
@@ -25,6 +25,7 @@ Unverified contracts stop with a clear error. Bytecode-only analysis is out of s
 | ID | Issue | SWC |
 |---|---|---|
 | `SC-REENTRANCY-001` | Low-level or high-level external call before storage update | SWC-107 |
+| `SC-REENTRANCY-002` | External call while shared storage is stale; another public function writes it | SWC-107 |
 | `SC-ACCESS-001` | Privileged admin surface without access control | SWC-105 |
 | `SC-TXORIGIN-001` | Auth via `tx.origin` | SWC-115 |
 | `SC-UNCHECKED-001` | Low-level call with ignored return value | SWC-104 |
@@ -39,6 +40,48 @@ Unverified contracts stop with a clear error. Bytecode-only analysis is out of s
 Each detector lives under `src/scanner/detectors/`. The CLI, FastAPI, and dashboard consume the same findings.
 
 Heuristic scanners still miss issues and can false-positive. Treat findings as a triage signal, not an audit sign-off.
+
+## Compared to Slither (repo fixtures only)
+
+Ran ChainSentry and [Slither](https://github.com/crytic/slither) **0.11.6** on every file under `contracts/vulnerable` and `contracts/safe`, compiled with **solc 0.8.20** (3 Sep 2026). Slither informational noise is omitted (`solc-version`, `low-level-calls`, naming, `immutable-states`). These contracts were written as ChainSentry tests, so this is not an independent bake-off and it is not a substitute for Slither on a real protocol.
+
+**Both flag the intended bug**
+
+| Fixture | ChainSentry | Slither |
+|---|---|---|
+| `Reentrancy.sol`, `InheritedReentrancy.sol`, `InheritedBaseReentrancy.sol` | `SC-REENTRANCY-001` | `reentrancy-eth` |
+| `TokenReentrancy.sol` | `SC-REENTRANCY-001`, `SC-ERC20-001` | `reentrancy-no-eth`, `unchecked-transfer` |
+| `TxOrigin.sol` | `SC-TXORIGIN-001` | `tx-origin` |
+| `UncheckedCall.sol` | `SC-UNCHECKED-001` | `unchecked-lowlevel` |
+| `DelegateCall.sol` | `SC-DELEGATECALL-001` | `controlled-delegatecall` |
+| `SelfDestruct.sol` | `SC-SELFDESTRUCT-001` | `suicidal` |
+| `Timestamp.sol` | `SC-TIMESTAMP-001` | `timestamp` |
+| `UncheckedErc20.sol` | `SC-ERC20-001` | `unchecked-transfer` |
+| `ArbitraryTransferFrom.sol` | `SC-TRANSFERFROM-001` | `arbitrary-send-erc20` |
+| `AccessControl.sol` | `SC-ACCESS-001` | `arbitrary-send-eth` |
+| `Randomness.sol` | `SC-RANDOMNESS-001` | `weak-prng` |
+
+Safe twins for those patterns (`SafeReentrancy`, `SafeTokenReentrancy`, `SafeAccessControl`, `AmmMint`, `SafeErc20Return`, `SafeInheritedReentrancy`, `SafeCrossFunctionReentrancy`) were clean in both tools.
+
+**ChainSentry-only on this set**
+
+| Fixture | What happened |
+|---|---|
+| `CrossFunctionReentrancy.sol` | `SC-REENTRANCY-002` on `harvest` / `claim`. Slither 0.11.6 emitted no reentrancy detector (`harvest` is a high-level `notify`, not ETH or ERC-20). |
+| `AdminMint.sol` | `SC-ACCESS-001` on `mint(address,uint256)`. Slither has no matching “unrestricted mint” check here. |
+| `UnprotectedInitialize.sol` | `SC-INIT-001`. Slither only reported `missing-zero-check` on the new owner, not an unguarded initializer. |
+
+**Slither-only, or ChainSentry is quieter**
+
+| Fixture | What happened |
+|---|---|
+| `SwapDeadline.sol` | Slither `timestamp`. We skip caller-supplied swap deadlines on purpose. |
+| `SafeTransferFrom.sol` | Slither `arbitrary-send-erc20` on `depositFor` even with `require(from == msg.sender)`. We treat that as `msg.sender`. |
+| `SafeInitialize.sol` | Slither `missing-zero-check`. Both tools accept the toy `initializer` modifier as enough. |
+
+ChainSentry also piles extra `SC-ACCESS-001` / `SC-TIMESTAMP-001` onto some vuln files (`Randomness`, `TxOrigin`, `SelfDestruct`) because those functions look like privileged drains or time gates. That is heuristic overlap, not extra unique bugs.
+
+Slither’s catalog is much larger than twelve AST checks (encoding, upgrades, data races, optimizations, …). Use ChainSentry for address-first triage. Run Slither — and a human review — before you treat a contract as safe.
 
 ## Quick start (dashboard)
 

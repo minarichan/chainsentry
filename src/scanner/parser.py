@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from scanner.ast_utils import node_line, type_name
 from scanner.compiler import CompilationResult
@@ -128,6 +128,117 @@ def parse_ast(ast: dict[str, Any], source: str, filename: str, abis: dict[str, l
     return contracts
 
 
+def contract_ast_id(contract: Contract) -> Optional[int]:
+    raw = (contract.ast or {}).get("id")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def inherited_base_ids(contracts: list[Contract]) -> set[int]:
+    """AST ids of contracts that appear as a parent of another parsed contract."""
+    bases: set[int] = set()
+    for contract in contracts:
+        self_id = contract_ast_id(contract)
+        for raw in (contract.ast or {}).get("linearizedBaseContracts") or []:
+            try:
+                bid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if self_id is None or bid != self_id:
+                bases.add(bid)
+    by_name = {c.name: c for c in contracts}
+    for contract in contracts:
+        for parent_name in contract.inheritance:
+            parent = by_name.get(parent_name)
+            pid = contract_ast_id(parent) if parent else None
+            if pid is not None:
+                bases.add(pid)
+    return bases
+
+
+def is_inherited_base(contract: Contract, base_ids: set[int]) -> bool:
+    cid = contract_ast_id(contract)
+    return cid is not None and cid in base_ids
+
+
+def _bases_to_inherit(contract: Contract, by_id: dict[int, Contract], by_name: dict[str, Contract]) -> list[Contract]:
+    self_id = contract_ast_id(contract)
+    ordered: list[Contract] = []
+    seen: set[int] = set()
+    for raw in (contract.ast or {}).get("linearizedBaseContracts") or []:
+        try:
+            bid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if self_id is not None and bid == self_id:
+            continue
+        base = by_id.get(bid)
+        if base is None or bid in seen:
+            continue
+        seen.add(bid)
+        ordered.append(base)
+    if ordered:
+        return ordered
+    for parent_name in contract.inheritance:
+        parent = by_name.get(parent_name)
+        if parent is None:
+            continue
+        pid = contract_ast_id(parent)
+        if pid is not None and pid in seen:
+            continue
+        if pid is not None:
+            seen.add(pid)
+        ordered.append(parent)
+        for ancestor in _bases_to_inherit(parent, by_id, by_name):
+            aid = contract_ast_id(ancestor)
+            if aid is not None and aid in seen:
+                continue
+            if aid is not None:
+                seen.add(aid)
+            ordered.append(ancestor)
+    return ordered
+
+
+def apply_inheritance(contracts: list[Contract]) -> None:
+    """Copy inherited state and non-overridden functions onto most-derived contracts.
+
+    OpenZeppelin / lib contracts are never in `contracts`, so those members stay
+    out of analysis. Bases that other parsed contracts inherit are left as-is;
+    detectors run only on the leaves so the same body is not reported twice.
+    """
+    by_id: dict[int, Contract] = {}
+    for item in contracts:
+        cid = contract_ast_id(item)
+        if cid is not None:
+            by_id[cid] = item
+    by_name = {c.name: c for c in contracts}
+    base_ids = inherited_base_ids(contracts)
+    for contract in contracts:
+        if is_inherited_base(contract, base_ids):
+            continue
+        seen_fns = {fn.name for fn in contract.functions}
+        seen_vars = {var.name for var in contract.state_variables}
+        seen_mods = {mod.name for mod in contract.modifiers}
+        for base in _bases_to_inherit(contract, by_id, by_name):
+            for var in base.state_variables:
+                if var.name in seen_vars:
+                    continue
+                contract.state_variables.append(var)
+                seen_vars.add(var.name)
+            for fn in base.functions:
+                if fn.is_constructor or fn.name in seen_fns:
+                    continue
+                contract.functions.append(fn)
+                seen_fns.add(fn.name)
+            for mod in base.modifiers:
+                if mod.name in seen_mods:
+                    continue
+                contract.modifiers.append(mod)
+                seen_mods.add(mod.name)
+
+
 def _is_dependency(path: str) -> bool:
     normalized = path.replace("\\", "/").lower()
     return (
@@ -141,8 +252,8 @@ def _is_dependency(path: str) -> bool:
 def parse_compilation(result: CompilationResult) -> list[Contract]:
     if not result.success:
         return []
+    contracts: list[Contract] = []
     if result.file_asts:
-        contracts: list[Contract] = []
         seen: set[tuple] = set()
         for fname, ast in result.file_asts.items():
             if _is_dependency(fname):
@@ -155,9 +266,11 @@ def parse_compilation(result: CompilationResult) -> list[Contract]:
                     continue
                 seen.add(key)
                 contracts.append(contract)
-        if contracts:
-            return contracts
-        primary_ast = result.file_asts.get(result.filename) or next(iter(result.file_asts.values()), {})
-        src = result.file_sources.get(result.filename, result.source)
-        return parse_ast(primary_ast, src, result.filename, result.abis)
-    return parse_ast(result.ast, result.source, result.filename, result.abis)
+        if not contracts:
+            primary_ast = result.file_asts.get(result.filename) or next(iter(result.file_asts.values()), {})
+            src = result.file_sources.get(result.filename, result.source)
+            contracts = parse_ast(primary_ast, src, result.filename, result.abis)
+    else:
+        contracts = parse_ast(result.ast, result.source, result.filename, result.abis)
+    apply_inheritance(contracts)
+    return contracts

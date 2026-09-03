@@ -44,6 +44,7 @@ def test_json_and_html_reports(tmp_path: Path) -> None:
     assert payload["runs"][0]["tool"]["driver"]["name"] == "ChainSentry"
     rule_ids = {rule["id"] for rule in payload["runs"][0]["tool"]["driver"]["rules"]}
     assert "SC-REENTRANCY-001" in rule_ids
+    assert "SC-REENTRANCY-002" in rule_ids
     assert "SC-ERC20-001" in rule_ids
     hits = payload["runs"][0]["results"]
     assert any(item["ruleId"] == "SC-REENTRANCY-001" for item in hits)

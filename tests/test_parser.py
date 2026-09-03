@@ -47,3 +47,17 @@ contract UsesMath { function f() external pure returns (uint) { return Math.add(
     compiled = compile_source(source, filename="LibUser.sol")
     contracts = parse_compilation(compiled)
     assert {c.name for c in contracts} == {"UsesMath"}
+
+
+def test_inherited_storage_and_functions_land_on_child() -> None:
+    compiled = compile_file(ROOT / "contracts" / "vulnerable" / "InheritedReentrancy.sol")
+    contracts = parse_compilation(compiled)
+    by_name = {c.name: c for c in contracts}
+    assert set(by_name) == {"VaultStorage", "InheritedReentrancy"}
+    child = by_name["InheritedReentrancy"]
+    base = by_name["VaultStorage"]
+    assert "balances" in child.state_variable_names
+    assert child.function_by_name("withdraw") is not None
+    assert child.function_by_name("deposit") is not None
+    assert base.function_by_name("withdraw") is None
+    assert base.function_by_name("deposit") is not None

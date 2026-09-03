@@ -9,7 +9,12 @@ from scanner.compiler import CompilationResult, compile_file, compile_source, co
 from scanner.detectors import all_detectors
 from scanner.etherscan import VerifiedContract
 from scanner.models import Finding, ScanResult, Severity
-from scanner.parser import is_analyzable_kind, parse_compilation
+from scanner.parser import (
+    inherited_base_ids,
+    is_analyzable_kind,
+    is_inherited_base,
+    parse_compilation,
+)
 from scanner.scoring import compute_score, failed_scorecard
 from scanner.snippets import attach_snippets
 
@@ -49,9 +54,12 @@ def _run_detectors(compilation: CompilationResult) -> ScanResult:
     findings: list[Finding] = []
     surfaces = []
     detectors = all_detectors()
+    base_ids = inherited_base_ids(contracts)
 
     for contract in contracts:
         if not is_analyzable_kind(contract.kind):
+            continue
+        if is_inherited_base(contract, base_ids):
             continue
         for detector in detectors:
             findings.extend(detector.detect(contract))

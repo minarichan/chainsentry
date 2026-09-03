@@ -22,7 +22,10 @@ def all_detectors() -> list[Detector]:
     from scanner.detectors.erc20_return import Erc20ReturnDetector
     from scanner.detectors.initializer import InitializerDetector
     from scanner.detectors.randomness import RandomnessDetector
-    from scanner.detectors.reentrancy import ReentrancyDetector
+    from scanner.detectors.reentrancy import (
+        CrossFunctionReentrancyDetector,
+        ReentrancyDetector,
+    )
     from scanner.detectors.selfdestruct import SelfdestructDetector
     from scanner.detectors.timestamp import TimestampDetector
     from scanner.detectors.transfer_from import ArbitraryTransferFromDetector
@@ -31,6 +34,7 @@ def all_detectors() -> list[Detector]:
 
     return [
         ReentrancyDetector(),
+        CrossFunctionReentrancyDetector(),
         AccessControlDetector(),
         TxOriginDetector(),
         UncheckedCallsDetector(),

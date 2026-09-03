@@ -180,7 +180,8 @@ export function ScanPage({ onResult, loadError }: Props) {
       </p>
       {busy ? <p className="scan-progress">{SCAN_STEPS[step]}</p> : null}
 
-      {error || loadError ? <p className="stop">{error || loadError}</p> : null}
+      {error ? <p className="stop">{error}</p> : null}
+      {!error && loadError ? <p className="muted">{loadError}</p> : null}
 
       <p>
         <button

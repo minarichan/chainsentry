@@ -48,3 +48,12 @@ export function rememberScan(id: string, label: string) {
     /* ignore quota / private mode */
   }
 }
+
+export function forgetScan(id: string) {
+  try {
+    const next = readScanHistory().filter((item) => item.id !== id);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}

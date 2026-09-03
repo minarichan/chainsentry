@@ -4,7 +4,7 @@ import { DetectorsPage } from "./pages/DetectorsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { ReportPage } from "./pages/ReportPage";
 import { ScanPage } from "./pages/ScanPage";
-import { rememberScan } from "./data/history";
+import { forgetScan, rememberScan } from "./data/history";
 import { getScan } from "./services/api";
 import type { ScanResult } from "./types/scan";
 
@@ -40,10 +40,16 @@ export default function App() {
             setResult(payload);
             setView("report");
           })
-          .catch((err: unknown) => {
+          .catch(() => {
+            forgetScan(next.id);
             setResult(null);
-            setLoadError(err instanceof Error ? err.message : "Scan not found");
+            setLoadError(
+              "That report is gone. This demo does not keep scans across deploys — run a new one.",
+            );
             setView("scan");
+            if (window.location.hash.startsWith("#/report/")) {
+              window.location.hash = "#/";
+            }
           })
           .finally(() => setLoadingReport(false));
       }

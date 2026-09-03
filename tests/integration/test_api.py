@@ -73,6 +73,83 @@ def test_scan_persists_in_sqlite(tmp_path, monkeypatch) -> None:
     assert "SC-TXORIGIN-001" in markdown.text
 
 
+def test_scan_rate_limit(monkeypatch) -> None:
+    from api.limits import reset_limits_for_tests
+    from api.routes import scan as scan_routes
+    from scanner.models import ScanResult, ScoreCard
+
+    monkeypatch.setenv("SCAN_RATE_PER_MIN", "1")
+    monkeypatch.setenv("SCAN_RATE_PER_HOUR", "1")
+    reset_limits_for_tests()
+
+    def stub(_body):
+        return ScanResult(
+            contracts=[],
+            findings=[],
+            scorecard=ScoreCard(score=100),
+            surfaces=[],
+            filename="C.sol",
+            solc_version="0.8.20",
+            source="",
+        )
+
+    monkeypatch.setattr(scan_routes, "_execute_scan", stub)
+    payload = {"source": "pragma solidity ^0.8.0; contract C {}", "filename": "C.sol", "include_onchain": False}
+    first = client.post("/scan", json=payload)
+    assert first.status_code == 200
+    second = client.post("/scan", json=payload)
+    assert second.status_code == 429
+    assert "too many" in second.json()["detail"].lower()
+    reset_limits_for_tests()
+
+
+def test_scan_rejects_when_busy(monkeypatch) -> None:
+    import threading
+
+    from api.limits import reset_limits_for_tests
+    from api.routes import scan as scan_routes
+    from scanner.models import ScanResult, ScoreCard
+
+    monkeypatch.setenv("SCAN_MAX_IN_FLIGHT", "1")
+    monkeypatch.setenv("SCAN_RATE_PER_MIN", "0")
+    monkeypatch.setenv("SCAN_TIMEOUT_SEC", "15")
+    reset_limits_for_tests()
+    started = threading.Event()
+    release = threading.Event()
+
+    def block(_body):
+        started.set()
+        release.wait(timeout=10)
+        return ScanResult(
+            contracts=[],
+            findings=[],
+            scorecard=ScoreCard(score=100),
+            surfaces=[],
+            filename="C.sol",
+            solc_version="0.8.20",
+            source="",
+        )
+
+    monkeypatch.setattr(scan_routes, "_execute_scan", block)
+    worker = threading.Thread(
+        target=lambda: client.post(
+            "/scan",
+            json={"source": "pragma solidity ^0.8.0; contract C {}", "filename": "C.sol", "include_onchain": False},
+        )
+    )
+    worker.start()
+    assert started.wait(timeout=5)
+    blocked = client.post(
+        "/scan",
+        json={"source": "pragma solidity ^0.8.0; contract C {}", "filename": "C.sol", "include_onchain": False},
+    )
+    assert blocked.status_code == 503
+    assert "busy" in blocked.json()["detail"].lower()
+    release.set()
+    worker.join(timeout=10)
+    reset_limits_for_tests()
+
+
 def test_scan_timeout(monkeypatch) -> None:
     import time
 

@@ -337,6 +337,33 @@ h1 {
   font-size: 14px;
 }
 
+.scan-history {
+  max-width: 720px;
+  margin: 8px 0 20px;
+}
+
+.scan-history-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scan-history ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-history a {
+  display: block;
+  padding: 8px 0;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .btn-text {
   background: none;
   border: 0;

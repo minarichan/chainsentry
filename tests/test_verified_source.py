@@ -95,3 +95,32 @@ def test_fetch_error_mentions_missing_etherscan_key(monkeypatch) -> None:
         assert "ETHERSCAN_API_KEY" in message
         assert "bytecode-only" not in message
         assert "0x0000000000000000000000000000000000000001" not in message
+
+
+def test_etherscan_hourly_cap_skips_to_blockscout(monkeypatch) -> None:
+    from scanner.etherscan import EtherscanBudgetError, reset_etherscan_budget_for_tests
+
+    monkeypatch.setenv("ETHERSCAN_MAX_PER_HOUR", "1")
+    reset_etherscan_budget_for_tests()
+    monkeypatch.setattr("scanner.etherscan._api_key", lambda explicit=None: "test-key")
+    monkeypatch.setattr(
+        "scanner.etherscan.fetch_from_sourcify",
+        lambda address, chain_id=None: (_ for _ in ()).throw(SourceNotVerifiedError("not on sourcify")),
+    )
+
+    def cap_etherscan(address, api_key=None, chain_id=None):
+        raise EtherscanBudgetError("Etherscan hourly cap reached; trying other explorers.")
+
+    monkeypatch.setattr("scanner.etherscan.fetch_from_etherscan", cap_etherscan)
+    impl = VerifiedContract(
+        address="0x1",
+        name="FromBlockscout",
+        source="pragma solidity ^0.8.0; contract C {}",
+        compiler_version="0.8.20",
+        solc_version="0.8.20",
+        verified=True,
+    )
+    monkeypatch.setattr("scanner.etherscan.fetch_from_blockscout", lambda address, chain_id=None: impl)
+    got = fetch_verified_source("0x0000000000000000000000000000000000000001")
+    assert got.name == "FromBlockscout"
+    reset_etherscan_budget_for_tests()

@@ -5,9 +5,10 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from api.limits import acquire_scan_slot, enforce_scan_rate, release_scan_slot
 from api.schemas.scan import ScanRequest, result_to_summary
 from api.store import load_scan, save_scan
 from scanner.chains import UnsupportedChainError, resolve_chain
@@ -58,10 +59,12 @@ def _execute_scan(body: ScanRequest) -> ScanResult:
 
 
 @router.post("/scan")
-def create_scan(body: ScanRequest) -> dict:
+def create_scan(body: ScanRequest, request: Request) -> dict:
     if not body.source and not body.address:
         raise HTTPException(status_code=400, detail="Provide source or address.")
 
+    enforce_scan_rate(request)
+    acquire_scan_slot()
     try:
         future = _SCAN_POOL.submit(_execute_scan, body)
         result = future.result(timeout=_timeout_seconds())
@@ -80,6 +83,8 @@ def create_scan(body: ScanRequest) -> dict:
         if body.address:
             raise HTTPException(status_code=502, detail=f"Verified source lookup failed: {exc}") from exc
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        release_scan_slot()
 
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, result)

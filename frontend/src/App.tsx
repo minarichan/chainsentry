@@ -3,6 +3,7 @@ import { EthMark } from "./components/EthMark";
 import { DetectorsPage } from "./pages/DetectorsPage";
 import { ReportPage } from "./pages/ReportPage";
 import { ScanPage } from "./pages/ScanPage";
+import { rememberScan } from "./data/history";
 import { getScan } from "./services/api";
 import type { ScanResult } from "./types/scan";
 
@@ -109,6 +110,8 @@ export default function App() {
             <ScanPage
               loadError={loadError}
               onResult={(next) => {
+                const label = next.address || next.analyzed_name || next.filename;
+                rememberScan(next.id, label);
                 setResult(next);
                 setLoadError(null);
                 setView("report");

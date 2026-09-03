@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -23,6 +25,10 @@ class SourceNotVerifiedError(RuntimeError):
 
 
 class UnsupportedCompilerError(RuntimeError):
+    pass
+
+
+class EtherscanBudgetError(RuntimeError):
     pass
 
 
@@ -125,6 +131,33 @@ def _api_key(explicit: Optional[str] = None) -> str:
     return (explicit or os.getenv("ETHERSCAN_API_KEY") or "").strip()
 
 
+_budget_lock = threading.Lock()
+_budget_hits: list[float] = []
+
+
+def reset_etherscan_budget_for_tests() -> None:
+    global _budget_hits
+    with _budget_lock:
+        _budget_hits = []
+
+
+def _consume_etherscan_budget() -> None:
+    raw = (os.getenv("ETHERSCAN_MAX_PER_HOUR") or "40").strip()
+    try:
+        cap = int(raw)
+    except ValueError:
+        cap = 40
+    if cap <= 0:
+        return
+    now = time.monotonic()
+    global _budget_hits
+    with _budget_lock:
+        _budget_hits = [stamp for stamp in _budget_hits if now - stamp < 3600]
+        if len(_budget_hits) >= cap:
+            raise EtherscanBudgetError("Etherscan hourly cap reached; trying other explorers.")
+        _budget_hits.append(now)
+
+
 def etherscan_get(
     params: dict[str, Any],
     api_key: Optional[str] = None,
@@ -135,6 +168,7 @@ def etherscan_get(
         raise RuntimeError(
             "Missing ETHERSCAN_API_KEY. Copy .env.example to .env and add a free key from https://etherscan.io/apis"
         )
+    _consume_etherscan_budget()
     query = {"chainid": resolve_chain(chain_id).id, "apikey": key, **params}
     with httpx.Client(timeout=30.0) as client:
         response = client.get(ETHERSCAN_V2_URL, params=query)
@@ -391,6 +425,8 @@ def fetch_verified_source(
             raise
         except SourceNotVerifiedError:
             missed.append("Etherscan")
+        except EtherscanBudgetError as exc:
+            errors.append(_short_exc(exc))
         except Exception as exc:
             errors.append(f"Etherscan failed ({_short_exc(exc)})")
 

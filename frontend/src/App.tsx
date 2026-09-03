@@ -33,15 +33,16 @@ export default function App() {
       const next = parseHash();
       setView(next.view);
       if (next.view === "report" && next.id && next.id !== result?.id) {
+        const scanId = next.id;
         setLoadingReport(true);
         setLoadError(null);
-        void getScan(next.id)
+        void getScan(scanId)
           .then((payload: ScanResult) => {
             setResult(payload);
             setView("report");
           })
           .catch(() => {
-            forgetScan(next.id);
+            forgetScan(scanId);
             setResult(null);
             setLoadError(
               "That report is gone. This demo does not keep scans across deploys — run a new one.",

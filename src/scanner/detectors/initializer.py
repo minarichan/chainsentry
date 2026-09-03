@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from scanner.ast_utils import function_has_modifier, has_msg_sender_check, identifier_name, walk
 from scanner.detectors.access_control import ACCESS_MODIFIERS
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.models import Contract, Finding, Severity
 
 INITIALIZER_MODIFIERS = {"initializer", "reinitializer", "onlyinitializing"}
 
@@ -57,7 +57,7 @@ class InitializerDetector:
                         f"initialized-flag guard, or caller check. On a proxy, anyone can call "
                         f"it and set owner or implementation parameters."
                     ),
-                    location=Location(file=contract.filename, line=fn.line),
+                    location=contract.location_of(fn.ast),
                     function=fn.name,
                     recommendation=(
                         "Use OpenZeppelin `Initializable` (`initializer` / `reinitializer`) "

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import call_result_is_used, high_level_external_call_name, node_line, walk
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.ast_utils import call_result_is_used, high_level_external_call_name, walk
+from scanner.models import Contract, Finding, Severity
 
 ERC20_BOOL_METHODS = {"transfer", "transferFrom", "approve"}
 
@@ -32,10 +32,7 @@ class Erc20ReturnDetector:
                             f"Some tokens return `false` on failure instead of reverting; the "
                             f"caller can continue as if the transfer succeeded."
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, node),
-                        ),
+                        location=contract.location_of(node),
                         function=fn.name,
                         recommendation=(
                             "Use OpenZeppelin `SafeERC20` (`safeTransfer` / `safeTransferFrom` / "

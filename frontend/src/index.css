@@ -701,6 +701,20 @@ textarea {
   margin-top: 12px;
 }
 
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  padding-top: 8px;
+}
+
+.finding {
+  padding: 22px 22px 20px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+
 .finding.is-muted {
   opacity: 0.55;
 }

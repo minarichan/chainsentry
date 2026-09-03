@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import function_has_modifier, is_selfdestruct_call, node_line, walk
+from scanner.ast_utils import function_has_modifier, is_selfdestruct_call, walk
 from scanner.detectors.access_control import ACCESS_MODIFIERS
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.models import Contract, Finding, Severity
 
 
 class SelfdestructDetector:
@@ -33,10 +33,7 @@ class SelfdestructDetector:
                                 else "Even when gated, destructible contracts surprise integrators and break upgrades."
                             )
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, node),
-                        ),
+                        location=contract.location_of(node),
                         function=fn.name,
                         recommendation=(
                             "Avoid `selfdestruct`. If funds must be rescued, use a withdrawal "

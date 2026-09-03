@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import call_result_is_used, low_level_call_kind, node_line, walk
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.ast_utils import call_result_is_used, low_level_call_kind, walk
+from scanner.models import Contract, Finding, Severity
 
 
 class UncheckedCallsDetector:
@@ -30,10 +30,7 @@ class UncheckedCallsDetector:
                             f"success flag. The callee may revert or run out of gas without the "
                             f"caller noticing."
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, node),
-                        ),
+                        location=contract.location_of(node),
                         function=fn.name,
                         recommendation=(
                             "Assign the return value `(bool success, ) = addr.call(...)` and "

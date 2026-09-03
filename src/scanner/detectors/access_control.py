@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from scanner.ast_utils import function_has_modifier, has_msg_sender_check, is_selfdestruct_call, walk
-from scanner.models import Contract, Finding, Function, Location, Severity
+from scanner.models import Contract, Finding, Function, Severity
 
 ACCESS_MODIFIERS = {
     "onlyowner",
@@ -106,7 +106,7 @@ class AccessControlDetector:
                         f"(or moves funds) without an access-control modifier or `msg.sender` check. "
                         f"Any address could call it."
                     ),
-                    location=Location(file=contract.filename, line=fn.line),
+                    location=contract.location_of(fn.ast),
                     function=fn.name,
                     recommendation=(
                         "Restrict this function with `onlyOwner` / role-based modifiers, "

@@ -24,6 +24,10 @@ def _norm(path: str) -> str:
     return path.replace("\\", "/").lower()
 
 
+def _basename(path: str) -> str:
+    return path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
 def _source_for(finding: Finding, contracts: list[Contract], file_sources: dict[str, str], fallback: str) -> str:
     path = finding.location.file or ""
     wanted = _norm(path)
@@ -34,13 +38,15 @@ def _source_for(finding: Finding, contracts: list[Contract], file_sources: dict[
             key = _norm(name)
             if key == wanted or key.endswith("/" + wanted) or wanted.endswith("/" + key):
                 return src
+            if _basename(name) == _basename(path):
+                return src
     names = {part.strip() for part in (finding.contract or "").split(",") if part.strip()}
     for contract in contracts:
         if path and _norm(contract.filename) == wanted and contract.source:
             return contract.source
-        if contract.name in names and contract.source:
+        if not path and contract.name in names and contract.source:
             return contract.source
-    if file_sources:
+    if len(file_sources) == 1:
         return next(iter(file_sources.values()))
     return fallback
 

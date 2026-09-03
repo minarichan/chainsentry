@@ -139,13 +139,15 @@ export function ReportPage({
 
         {tab === "findings" &&
           (findings.length ? (
-            findings.map((finding) => (
-              <FindingCard
-                key={`${finding.id}-${finding.contract}-${finding.location.file}-${finding.location.line}-${finding.function}`}
-                finding={finding}
-                onMute={(item, muted) => void onMute(item, muted)}
-              />
-            ))
+            <div className="findings-list">
+              {findings.map((finding) => (
+                <FindingCard
+                  key={`${finding.id}-${finding.contract}-${finding.location.file}-${finding.location.line}-${finding.function}`}
+                  finding={finding}
+                  onMute={(item, muted) => void onMute(item, muted)}
+                />
+              ))}
+            </div>
           ) : (
             <p className="muted">No issues detected by the current detector set.</p>
           ))}

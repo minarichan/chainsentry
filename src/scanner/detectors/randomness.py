@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import is_block_member, node_line, walk
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.ast_utils import is_block_member, walk
+from scanner.models import Contract, Finding, Severity
 
 WEAK_MEMBERS = {"timestamp", "difficulty", "number", "prevrandao", "coinbase", "gaslimit"}
 
@@ -19,6 +19,20 @@ def _is_weak_source(node: dict) -> bool:
         if is_block_member(node, member):
             return True
     return False
+
+
+def _rng_node(hits: list[dict], fn_ast: dict) -> dict:
+    """Prefer the block attribute mixed into keccak / encodePacked, not an earlier hit."""
+    for node in walk(fn_ast):
+        if node.get("nodeType") != "FunctionCall":
+            continue
+        name = (node.get("expression") or {}).get("name")
+        if name not in {"keccak256", "sha256", "abi.encodePacked"}:
+            continue
+        for hit in hits:
+            if hit is node or any(child is hit for child in walk(node)):
+                return hit
+    return hits[0]
 
 
 class RandomnessDetector:
@@ -43,7 +57,7 @@ class RandomnessDetector:
                 continue
             if not (uses_hash or uses_modulo):
                 continue
-            node = hits[0]
+            node = _rng_node(hits, fn.ast)
             findings.append(
                 Finding(
                     id=self.id,
@@ -55,10 +69,7 @@ class RandomnessDetector:
                         f"(`timestamp`, `difficulty`, `number`, `prevrandao`, or `blockhash`). "
                         f"Validators and callers can bias or predict this value."
                     ),
-                    location=Location(
-                        file=contract.filename,
-                        line=node_line(contract.source, node),
-                    ),
+                    location=contract.location_of(node),
                     function=fn.name,
                     recommendation=(
                         "Use a verifiable random function (Chainlink VRF or equivalent). "

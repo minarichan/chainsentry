@@ -273,4 +273,20 @@ def parse_compilation(result: CompilationResult) -> list[Contract]:
     else:
         contracts = parse_ast(result.ast, result.source, result.filename, result.abis)
     apply_inheritance(contracts)
+    units = _source_units(result)
+    for contract in contracts:
+        contract.source_units = units
     return contracts
+
+
+def _source_units(result: CompilationResult) -> dict[int, tuple[str, str]]:
+    units: dict[int, tuple[str, str]] = {}
+    for index, name in (result.source_ids or {}).items():
+        units[int(index)] = (name, result.file_sources.get(name) or result.source)
+    if units:
+        return units
+    for index, (name, src) in enumerate((result.file_sources or {}).items()):
+        units[index] = (name, src)
+    if not units and result.source:
+        units[0] = (result.filename, result.source)
+    return units

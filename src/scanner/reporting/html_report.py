@@ -178,7 +178,7 @@ def render_html(result: ScanResult) -> str:
     .cats {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }}
     .cat {{ display: flex; justify-content: space-between; border: 1px solid var(--line); padding: 8px 12px; font-size: 14px; }}
     h2 {{ margin-top: 40px; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }}
-    .finding {{ border: 1px solid var(--line); background: #0b1620; padding: 18px 20px; margin: 12px 0; }}
+    .finding {{ border: 1px solid var(--line); background: #0b1620; padding: 22px 20px; margin: 28px 0; }}
     .finding header {{ display: flex; gap: 10px; align-items: center; }}
     .sev {{ color: white; font-size: 11px; padding: 2px 8px; letter-spacing: 0.08em; }}
     .id, .swc, code {{ font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; color: var(--muted); }}

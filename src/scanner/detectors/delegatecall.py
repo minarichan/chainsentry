@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import identifier_name, low_level_call_kind, node_line, unwrap_call_expression, walk
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.ast_utils import identifier_name, low_level_call_kind, unwrap_call_expression, walk
+from scanner.models import Contract, Finding, Severity
 
 
 def _delegate_target_name(call_node: dict) -> str | None:
@@ -43,10 +43,7 @@ class DelegateCallDetector:
                             f"`{fn.name}()` uses `delegatecall`. Delegatecall runs the callee's code "
                             f"with the caller's storage, `msg.sender`, and `msg.value`.{extra}"
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, node),
-                        ),
+                        location=contract.location_of(node),
                         function=fn.name,
                         recommendation=(
                             "Never `delegatecall` to a user-supplied address. Use a fixed "

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import identifier_name, is_block_member, node_line, node_offset, walk
-from scanner.models import Contract, Finding, Function, Location, Severity
+from scanner.ast_utils import identifier_name, is_block_member, node_offset, walk
+from scanner.models import Contract, Finding, Function, Severity
 
 # Caller-supplied expiry is the Uniswap `ensure(deadline)` pattern, not a time gate.
 _COMPARE_OPS = {">", "<", ">=", "<=", "==", "!="}
@@ -82,10 +82,7 @@ class TimestampDetector:
                         f"(compared to storage or used in arithmetic), not merely a caller deadline. "
                         f"Validators can nudge timestamps within protocol limits."
                     ),
-                    location=Location(
-                        file=contract.filename,
-                        line=node_line(contract.source, location_node),
-                    ),
+                    location=contract.location_of(location_node),
                     function=fn.name,
                     recommendation=(
                         "Do not use timestamps for randomness or tight fairness windows. "

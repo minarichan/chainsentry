@@ -7,11 +7,10 @@ from scanner.ast_utils import (
     identifier_name,
     is_address_this,
     is_msg_sender,
-    node_line,
     param_compared_to_msg_sender,
     walk,
 )
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.models import Contract, Finding, Severity
 
 
 class ArbitraryTransferFromDetector:
@@ -55,10 +54,7 @@ class ArbitraryTransferFromDetector:
                             f"function argument. Anyone who has approved this contract can be "
                             f"drained if a caller passes their address as `{name}`."
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, node),
-                        ),
+                        location=contract.location_of(node),
                         function=fn.name,
                         recommendation=(
                             "Pull tokens from `msg.sender` (`transferFrom(msg.sender, ...)`), "

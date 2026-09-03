@@ -23,3 +23,47 @@ def test_reentrancy_finding_includes_source() -> None:
     assert hit.snippet_start_line >= 1
     assert hit.location.line >= hit.snippet_start_line
     assert "Reentrancy.sol" in hit.location.file or hit.location.file.endswith("Reentrancy.sol")
+    source = (CONTRACTS / "vulnerable" / "Reentrancy.sol").read_text(encoding="utf-8")
+    assert ".call" in source.splitlines()[hit.location.line - 1]
+
+
+def test_randomness_highlights_the_entropy_line() -> None:
+    result = scan_file(CONTRACTS / "vulnerable" / "Randomness.sol")
+    hit = next(f for f in result.findings if f.id == "SC-RANDOMNESS-001")
+    source = (CONTRACTS / "vulnerable" / "Randomness.sol").read_text(encoding="utf-8")
+    line = source.splitlines()[hit.location.line - 1]
+    assert any(token in line for token in ("keccak256", "timestamp", "difficulty", "blockhash"))
+    assert "function enter" not in (hit.snippet or "")
+
+
+def test_inherited_finding_uses_parent_file_and_call_line() -> None:
+    from scanner.compiler import compile_sources
+    from scanner.engine import _run_detectors
+
+    base = """pragma solidity ^0.8.0;
+contract SplitBase {
+    mapping(address => uint256) public balances;
+    function withdraw() public {
+        uint256 amount = balances[msg.sender];
+        (bool sent, ) = msg.sender.call{value: amount}("");
+        require(sent, "failed");
+        balances[msg.sender] = 0;
+    }
+}
+"""
+    child = """pragma solidity ^0.8.0;
+import "./SplitBase.sol";
+contract SplitChild is SplitBase {}
+"""
+    compilation = compile_sources(
+        {"SplitBase.sol": base, "SplitChild.sol": child},
+        filename="SplitChild.sol",
+    )
+    assert compilation.success, compilation.errors
+    result = _run_detectors(compilation)
+    hit = next(f for f in result.findings if f.id == "SC-REENTRANCY-001")
+    assert hit.function == "withdraw"
+    assert hit.location.file.replace("\\", "/").endswith("SplitBase.sol")
+    assert ".call" in (hit.snippet or "")
+    assert ".call" in base.splitlines()[hit.location.line - 1]
+    assert "contract SplitChild" not in (hit.snippet or "")

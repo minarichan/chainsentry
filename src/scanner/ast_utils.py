@@ -40,6 +40,23 @@ def node_line(source: str, node: Node) -> int:
     return offset_to_line(source, node_offset(node))
 
 
+def node_file_and_line(
+    node: Node,
+    source_units: dict[int, tuple[str, str]],
+    default_file: str,
+    default_source: str,
+) -> tuple[str, int]:
+    """Map a solc AST node to (filename, line) using `src` `start:length:index`."""
+    start, _, index = parse_src(node.get("src"))
+    if index in source_units:
+        filename, source = source_units[index]
+    elif len(source_units) == 1:
+        filename, source = next(iter(source_units.values()))
+    else:
+        filename, source = default_file, default_source
+    return filename, offset_to_line(source, start)
+
+
 def walk(node: Any) -> Iterator[Node]:
     """Depth-first walk of every dict node in an AST tree."""
     if isinstance(node, dict):

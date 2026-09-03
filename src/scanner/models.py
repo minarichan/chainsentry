@@ -83,6 +83,8 @@ class Contract:
     line: int = 0
     ast: dict[str, Any] = field(default_factory=dict, repr=False)
     abi: list[dict[str, Any]] = field(default_factory=list)
+    # solc source index → (filename, text). Inherited AST nodes keep the parent index.
+    source_units: dict[int, tuple[str, str]] = field(default_factory=dict, repr=False)
 
     def function_by_name(self, name: str) -> Optional[Function]:
         for fn in self.functions:
@@ -93,6 +95,17 @@ class Contract:
     @property
     def state_variable_names(self) -> set[str]:
         return {v.name for v in self.state_variables}
+
+    def location_of(self, node: dict[str, Any] | None) -> Location:
+        """File and line for an AST node, including members inherited from another file."""
+        from scanner.ast_utils import node_file_and_line
+
+        if not node:
+            return Location(file=self.filename, line=self.line or 1)
+        filename, line = node_file_and_line(
+            node, self.source_units, self.filename, self.source
+        )
+        return Location(file=filename, line=line)
 
 
 @dataclass

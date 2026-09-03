@@ -60,6 +60,7 @@ class CompilationResult:
     warnings: list[str] = field(default_factory=list)
     file_asts: dict[str, dict[str, Any]] = field(default_factory=dict)
     file_sources: dict[str, str] = field(default_factory=dict)
+    source_ids: dict[int, str] = field(default_factory=dict)
 
 
 def parse_pragma(source: str) -> Optional[str]:
@@ -397,8 +398,20 @@ def compile_sources(
             )
 
         file_asts: dict[str, dict[str, Any]] = {}
+        source_ids: dict[int, str] = {}
         for name, data in (output.get("sources") or {}).items():
-            file_asts[name] = (data or {}).get("ast") or {}
+            payload = data or {}
+            file_asts[name] = payload.get("ast") or {}
+            raw_id = payload.get("id")
+            if raw_id is None:
+                continue
+            try:
+                source_ids[int(raw_id)] = name
+            except (TypeError, ValueError):
+                continue
+        if not source_ids:
+            for index, name in enumerate(file_asts):
+                source_ids[index] = name
 
         ast = file_asts.get(filename) or next(iter(file_asts.values()), {})
         abis: dict[str, list[dict[str, Any]]] = {}
@@ -420,6 +433,7 @@ def compile_sources(
             warnings=warnings,
             file_asts=file_asts,
             file_sources=sources,
+            source_ids=source_ids,
         )
 
     first_opt = normalize_optimizer(optimizer)

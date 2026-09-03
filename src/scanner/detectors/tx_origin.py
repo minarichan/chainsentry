@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scanner.ast_utils import is_tx_origin, node_line, walk
-from scanner.models import Contract, Finding, Location, Severity
+from scanner.ast_utils import is_tx_origin, walk
+from scanner.models import Contract, Finding, Severity
 
 
 class TxOriginDetector:
@@ -13,14 +13,15 @@ class TxOriginDetector:
     def detect(self, contract: Contract) -> list[Finding]:
         findings: list[Finding] = []
         for fn in contract.functions:
-            seen_offsets: set[int] = set()
+            seen: set[tuple[str, int]] = set()
             for node in walk(fn.ast):
                 if not is_tx_origin(node):
                     continue
-                offset = node_line(contract.source, node)
-                if offset in seen_offsets:
+                loc = contract.location_of(node)
+                key = (loc.file, loc.line)
+                if key in seen:
                     continue
-                seen_offsets.add(offset)
+                seen.add(key)
                 findings.append(
                     Finding(
                         id=self.id,
@@ -32,7 +33,7 @@ class TxOriginDetector:
                             f"original EOA in the call chain, so a malicious contract called by the "
                             f"owner can impersonate them."
                         ),
-                        location=Location(file=contract.filename, line=offset),
+                        location=loc,
                         function=fn.name,
                         recommendation="Authorize with `msg.sender` (and/or a dedicated owner variable), never `tx.origin`.",
                         classification="SWC-115",

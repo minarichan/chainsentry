@@ -5,13 +5,12 @@ from __future__ import annotations
 from scanner.ast_utils import (
     assignment_base_name,
     function_has_modifier,
-    node_line,
     node_offset,
     reentrancy_call_kind,
     storage_names_referenced,
     walk,
 )
-from scanner.models import Contract, Finding, Function, Location, Severity
+from scanner.models import Contract, Finding, Function, Severity
 
 REENTRANCY_GUARDS = {
     "nonreentrant",
@@ -67,10 +66,7 @@ class ReentrancyDetector:
                             f"storage variable(s) `{written}`. An attacker contract can re-enter "
                             f"before the balance or authorization state is finalized."
                         ),
-                        location=Location(
-                            file=contract.filename,
-                            line=node_line(contract.source, call_node),
-                        ),
+                        location=contract.location_of(call_node),
                         function=fn.name,
                         recommendation=(
                             "Follow Checks-Effects-Interactions: update state before the external "
@@ -185,10 +181,7 @@ class CrossFunctionReentrancyDetector:
                         f"`{written}` is still stale. {sibling_names} write(s) that "
                         "state and can run in the same transaction before it is finalized."
                     ),
-                    location=Location(
-                        file=contract.filename,
-                        line=node_line(contract.source, call_node),
-                    ),
+                    location=contract.location_of(call_node),
                     function=fn.name,
                     recommendation=(
                         "Update the shared state before the external call, and apply the "

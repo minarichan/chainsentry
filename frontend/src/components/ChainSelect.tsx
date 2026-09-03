@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { SCAN_CHAINS, type ScanChainId } from "../data/chains";
 
 interface Props {
@@ -38,7 +38,7 @@ export function ChainSelect({ id, value, disabled, onChange }: Props) {
     setOpen(false);
   }
 
-  function onTriggerKey(event: KeyboardEvent<HTMLButtonElement>) {
+  function onTriggerKey(event: ReactKeyboardEvent<HTMLButtonElement>) {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (!open) {

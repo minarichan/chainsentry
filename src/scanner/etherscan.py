@@ -440,9 +440,15 @@ def fetch_verified_source(
         errors.append(f"Blockscout failed ({_short_exc(exc)})")
 
     names = ", ".join(missed) if missed else "explorers"
-    message = f"No verified Solidity source on {names}."
+    message = f"No verified Solidity source on {names} for this chain."
     if not key:
-        message += " Add ETHERSCAN_API_KEY to .env to try Etherscan."
+        message += (
+            " This demo uses Sourcify, then Blockscout; it has no Etherscan key, "
+            "so explorer-only contracts will miss. Try the example address, or paste a .sol file. "
+            "Locally you can add ETHERSCAN_API_KEY to .env to also try Etherscan."
+        )
+    else:
+        message += " The contract is not verified on those explorers."
     if errors:
         message += " " + " ".join(errors)
     raise SourceNotVerifiedError(message)

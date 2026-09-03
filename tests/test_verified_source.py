@@ -93,6 +93,7 @@ def test_fetch_error_mentions_missing_etherscan_key(monkeypatch) -> None:
         assert "Sourcify" in message
         assert "Blockscout" in message
         assert "ETHERSCAN_API_KEY" in message
+        assert "example address" in message
         assert "bytecode-only" not in message
         assert "0x0000000000000000000000000000000000000001" not in message
 

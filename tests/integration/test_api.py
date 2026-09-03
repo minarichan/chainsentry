@@ -199,6 +199,32 @@ def test_scan_passes_chain_id(monkeypatch) -> None:
     )
     assert response.status_code == 422
     assert captured["chain_id"] == 8453
+    assert "nope" in response.json()["detail"]
+
+
+def test_scan_unverified_address_is_422_not_500(monkeypatch) -> None:
+    from scanner.etherscan import SourceNotVerifiedError
+    from api.routes import scan as scan_routes
+
+    def fake_target(address, api_key=None, chain_id=None):
+        raise SourceNotVerifiedError(
+            "No verified Solidity source on Sourcify, Blockscout for this chain. "
+            "This demo uses Sourcify, then Blockscout; it has no Etherscan key."
+        )
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "chain_id": 1,
+            "include_onchain": False,
+        },
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "Sourcify" in detail
+    assert "500" not in detail
 
 
 def test_mute_finding_and_rescan_same_address(tmp_path, monkeypatch) -> None:

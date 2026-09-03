@@ -49,6 +49,41 @@ def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
     return [grouped[key] for key in order]
 
 
+def _fn_key(finding: Finding) -> tuple[str, str]:
+    contract = (finding.contract or "").split(",")[0].strip().lower()
+    return contract, (finding.function or "").lower()
+
+
+# More specific checks win when they fire on the same function. ACCESS/TIMESTAMP
+# often repeat the same story (drain, entropy) as another HIGH card.
+_ACCESS_COVERED_BY = {
+    "SC-TXORIGIN-001",
+    "SC-SELFDESTRUCT-001",
+    "SC-RANDOMNESS-001",
+    "SC-INIT-001",
+}
+_REENTRANCY_IDS = {"SC-REENTRANCY-001", "SC-REENTRANCY-002"}
+
+
+def _collapse_overlaps(findings: list[Finding]) -> list[Finding]:
+    """Drop pile-on findings that restate a more specific hit on the same function."""
+    by_fn: dict[tuple[str, str], set[str]] = {}
+    for finding in findings:
+        by_fn.setdefault(_fn_key(finding), set()).add(finding.id)
+
+    kept: list[Finding] = []
+    for finding in findings:
+        ids = by_fn.get(_fn_key(finding), set())
+        if finding.id == "SC-TIMESTAMP-001" and "SC-RANDOMNESS-001" in ids:
+            continue
+        if finding.id == "SC-DELEGATECALL-001" and ids & _REENTRANCY_IDS:
+            continue
+        if finding.id == "SC-ACCESS-001" and ids & _ACCESS_COVERED_BY:
+            continue
+        kept.append(finding)
+    return kept
+
+
 def _run_detectors(compilation: CompilationResult) -> ScanResult:
     contracts = parse_compilation(compilation)
     findings: list[Finding] = []
@@ -65,7 +100,7 @@ def _run_detectors(compilation: CompilationResult) -> ScanResult:
             findings.extend(detector.detect(contract))
         surfaces.extend(analyze_contract(contract))
 
-    findings = _dedupe_findings(findings)
+    findings = _collapse_overlaps(_dedupe_findings(findings))
     attach_snippets(
         findings,
         contracts,

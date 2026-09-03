@@ -11,6 +11,12 @@ async function parseError(response: Response): Promise<string> {
       if (detail === "Internal Server Error") {
         return "Scanner backend failed. If this is localhost, start the API on port 8000.";
       }
+      if (detail.startsWith("Verified source lookup failed")) {
+        return (
+          "Could not fetch verified source. This public demo looks up Sourcify, then Blockscout " +
+          "(no Etherscan key). Try the example address, or paste a .sol file."
+        );
+      }
       return detail;
     }
     return JSON.stringify(body.detail ?? body);

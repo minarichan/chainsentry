@@ -25,7 +25,9 @@ def test_safe_reentrancy_no_false_positive() -> None:
 
 
 def test_tx_origin_detected() -> None:
-    assert "SC-TXORIGIN-001" in _ids(VULN / "TxOrigin.sol")
+    ids = _ids(VULN / "TxOrigin.sol")
+    assert "SC-TXORIGIN-001" in ids
+    assert "SC-ACCESS-001" not in ids
 
 
 def test_unchecked_call_detected() -> None:
@@ -34,6 +36,25 @@ def test_unchecked_call_detected() -> None:
 
 def test_delegatecall_detected() -> None:
     assert "SC-DELEGATECALL-001" in _ids(VULN / "DelegateCall.sol")
+
+
+def test_reentrancy_covers_delegatecall_on_same_function() -> None:
+    from scanner.engine import scan_source
+
+    source = """pragma solidity ^0.8.0;
+contract Both {
+    mapping(address => uint256) public balances;
+    function execute(address target) public {
+        (bool ok, ) = target.delegatecall("");
+        require(ok);
+        balances[msg.sender] = 0;
+    }
+}
+"""
+    result = scan_source(source, filename="Both.sol")
+    ids = {f.id for f in result.findings}
+    assert "SC-REENTRANCY-001" in ids
+    assert "SC-DELEGATECALL-001" not in ids
 
 
 def test_access_control_detected() -> None:
@@ -115,11 +136,16 @@ def test_interface_not_on_attack_surface() -> None:
 
 
 def test_selfdestruct_detected() -> None:
-    assert "SC-SELFDESTRUCT-001" in _ids(VULN / "SelfDestruct.sol")
+    ids = _ids(VULN / "SelfDestruct.sol")
+    assert "SC-SELFDESTRUCT-001" in ids
+    assert "SC-ACCESS-001" not in ids
 
 
 def test_randomness_detected() -> None:
-    assert "SC-RANDOMNESS-001" in _ids(VULN / "Randomness.sol")
+    ids = _ids(VULN / "Randomness.sol")
+    assert "SC-RANDOMNESS-001" in ids
+    assert "SC-TIMESTAMP-001" not in ids
+    assert "SC-ACCESS-001" not in ids
 
 
 def test_unchecked_erc20_detected() -> None:

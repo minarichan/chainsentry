@@ -332,6 +332,11 @@ h1 {
   font-size: 13px;
 }
 
+.scan-hint .mono {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
 .scan-progress {
   max-width: 720px;
   margin: 0 0 12px;

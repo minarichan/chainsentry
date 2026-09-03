@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChainSelect } from "../components/ChainSelect";
+import { DEMO_SCAN } from "../data/demo";
 import { readStoredChainId, storeChainId, type ScanChainId } from "../data/chains";
 import { scanAddress, scanSource } from "../services/api";
 import type { ScanResult } from "../types/scan";
@@ -98,6 +99,14 @@ export function ScanPage({ onResult, loadError }: Props) {
     void run(() => scanAddress(trimmed, chainId));
   }
 
+  function onTryDemo() {
+    setShowSource(false);
+    setChainId(DEMO_SCAN.chainId);
+    storeChainId(DEMO_SCAN.chainId);
+    setAddress(DEMO_SCAN.address);
+    void run(() => scanAddress(DEMO_SCAN.address, DEMO_SCAN.chainId));
+  }
+
   function onSourceSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = source.trim();
@@ -159,6 +168,15 @@ export function ScanPage({ onResult, loadError }: Props) {
       </form>
       <p className="scan-hint">
         Uses Sourcify, then Etherscan (needs a key in .env), then Blockscout — on the chain you pick.
+        Explorer-only contracts miss on the public demo (no Etherscan key).
+      </p>
+      <p className="scan-hint">
+        <button className="btn-text" type="button" disabled={busy} onClick={onTryDemo}>
+          Try {DEMO_SCAN.label} on {DEMO_SCAN.network}
+        </button>
+        {" "}
+        <span className="mono">{DEMO_SCAN.address}</span>
+        {" — Sourcify-verified, no key needed."}
       </p>
       {busy ? <p className="scan-progress">{SCAN_STEPS[step]}</p> : null}
 

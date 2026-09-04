@@ -178,6 +178,91 @@ def test_scan_rejects_unknown_chain() -> None:
     assert response.status_code == 422
 
 
+def test_scan_passes_browser_etherscan_key(monkeypatch) -> None:
+    from scanner.etherscan import SourceNotVerifiedError
+    from api.routes import scan as scan_routes
+
+    captured: dict[str, str | None] = {}
+
+    def fake_target(address, api_key=None, chain_id=None):
+        captured["api_key"] = api_key
+        raise SourceNotVerifiedError("nope")
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "chain_id": 1,
+            "include_onchain": False,
+            "etherscan_api_key": "user-secret-key",
+        },
+    )
+    assert response.status_code == 422
+    assert captured["api_key"] == "user-secret-key"
+    assert "user-secret-key" not in response.text
+
+
+def test_scan_redacts_etherscan_key_on_502(monkeypatch) -> None:
+    from api.routes import scan as scan_routes
+
+    def fake_target(address, api_key=None, chain_id=None):
+        raise RuntimeError(f"upstream rejected {api_key}")
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "chain_id": 1,
+            "include_onchain": False,
+            "etherscan_api_key": "user-secret-key",
+        },
+    )
+    assert response.status_code == 502
+    assert "user-secret-key" not in response.text
+    assert "[redacted]" in response.json()["detail"]
+
+
+def test_scan_does_not_persist_etherscan_key(tmp_path, monkeypatch) -> None:
+    from api.limits import reset_limits_for_tests
+    from api.routes import scan as scan_routes
+    from scanner.models import ScanResult, ScoreCard
+
+    monkeypatch.setenv("SCAN_DB_PATH", str(tmp_path / "scans.sqlite"))
+    monkeypatch.setenv("SCAN_RATE_PER_MIN", "0")
+    reset_limits_for_tests()
+
+    def stub(_body):
+        return ScanResult(
+            contracts=[],
+            findings=[],
+            scorecard=ScoreCard(score=100, verdict="clean", verdict_label="No detector hits"),
+            surfaces=[],
+            filename="C.sol",
+            solc_version="0.8.20",
+            source="",
+            address="0x0000000000000000000000000000000000000001",
+            chain_id=1,
+            network="Ethereum",
+        )
+
+    monkeypatch.setattr(scan_routes, "_execute_scan", stub)
+    created = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "include_onchain": False,
+            "etherscan_api_key": "do-not-store-this-key",
+        },
+    )
+    assert created.status_code == 200
+    db = (tmp_path / "scans.sqlite").read_bytes()
+    assert b"do-not-store-this-key" not in db
+    assert "do-not-store-this-key" not in created.text
+    reset_limits_for_tests()
+
+
 def test_scan_passes_chain_id(monkeypatch) -> None:
     from scanner.etherscan import SourceNotVerifiedError
     from api.routes import scan as scan_routes

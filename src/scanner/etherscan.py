@@ -168,7 +168,8 @@ def etherscan_get(
         raise RuntimeError(
             "Missing ETHERSCAN_API_KEY. Copy .env.example to .env and add a free key from https://etherscan.io/apis"
         )
-    _consume_etherscan_budget()
+    if not (api_key or "").strip():
+        _consume_etherscan_budget()
     query = {"chainid": resolve_chain(chain_id).id, "apikey": key, **params}
     with httpx.Client(timeout=30.0) as client:
         response = client.get(ETHERSCAN_V2_URL, params=query)
@@ -390,8 +391,10 @@ def fetch_from_blockscout(address: str, chain_id: Optional[int] = None) -> Verif
     return _from_blockscout_payload(address, payload)
 
 
-def _short_exc(exc: BaseException) -> str:
+def _short_exc(exc: BaseException, secret: str | None = None) -> str:
     text = str(exc).strip().splitlines()[0]
+    if secret:
+        text = text.replace(secret, "[redacted]")
     return text[:100]
 
 
@@ -416,7 +419,7 @@ def fetch_verified_source(
     except SourceNotVerifiedError:
         missed.append("Sourcify")
     except Exception as exc:
-        errors.append(f"Sourcify failed ({_short_exc(exc)})")
+        errors.append(f"Sourcify failed ({_short_exc(exc, key)})")
 
     if key:
         try:
@@ -426,9 +429,9 @@ def fetch_verified_source(
         except SourceNotVerifiedError:
             missed.append("Etherscan")
         except EtherscanBudgetError as exc:
-            errors.append(_short_exc(exc))
+            errors.append(_short_exc(exc, key))
         except Exception as exc:
-            errors.append(f"Etherscan failed ({_short_exc(exc)})")
+            errors.append(f"Etherscan failed ({_short_exc(exc, key)})")
 
     try:
         return fetch_from_blockscout(address, chain_id=spec.id)
@@ -437,7 +440,7 @@ def fetch_verified_source(
     except SourceNotVerifiedError:
         missed.append("Blockscout")
     except Exception as exc:
-        errors.append(f"Blockscout failed ({_short_exc(exc)})")
+        errors.append(f"Blockscout failed ({_short_exc(exc, key)})")
 
     names = ", ".join(missed) if missed else "explorers"
     message = f"No verified Solidity source on {names} for this chain."
@@ -445,7 +448,7 @@ def fetch_verified_source(
         message += (
             " This demo uses Sourcify, then Blockscout; it has no Etherscan key, "
             "so explorer-only contracts will miss. Try the example address, or paste a .sol file. "
-            "Locally you can add ETHERSCAN_API_KEY to .env to also try Etherscan."
+            "You can add an Etherscan key in Settings (this browser only), or locally set ETHERSCAN_API_KEY in .env."
         )
     else:
         message += " The contract is not verified on those explorers."

@@ -453,13 +453,20 @@ h1 {
 }
 
 label {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  word-spacing: 0.12em;
+  line-height: 1.4;
   color: var(--muted);
   margin-bottom: 10px;
 }
 
-input[type="text"], textarea {
+input[type="text"], input[type="password"], textarea {
   width: 100%;
   background: var(--paper);
   color: var(--ink);
@@ -467,6 +474,17 @@ input[type="text"], textarea {
   border-radius: 18px;
   padding: 14px 16px;
   font-size: 14px;
+  letter-spacing: 0;
+  word-spacing: normal;
+  outline: none;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 textarea {
@@ -907,9 +925,19 @@ th {
   }
   .nav-pill {
     justify-content: flex-start;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
     -webkit-overflow-scrolling: touch;
     padding: 8px;
+    scrollbar-width: none;
+  }
+  .nav-pill::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+  .nav-link {
+    padding: 8px 10px;
+    font-size: 13px;
   }
   .nav-pill .btn.small {
     margin-left: auto;

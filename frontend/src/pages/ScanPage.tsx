@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ChainSelect } from "../components/ChainSelect";
 import { DEMO_SCAN } from "../data/demo";
 import { readStoredChainId, storeChainId, type ScanChainId } from "../data/chains";
+import { readEtherscanKey } from "../data/etherscanKey";
 import { scanAddress, scanSource } from "../services/api";
 import type { ScanResult } from "../types/scan";
 
@@ -96,7 +97,7 @@ export function ScanPage({ onResult, loadError }: Props) {
       setError("Provide a contract address.");
       return;
     }
-    void run(() => scanAddress(trimmed, chainId));
+    void run(() => scanAddress(trimmed, chainId, readEtherscanKey()));
   }
 
   function onTryDemo() {
@@ -104,7 +105,7 @@ export function ScanPage({ onResult, loadError }: Props) {
     setChainId(DEMO_SCAN.chainId);
     storeChainId(DEMO_SCAN.chainId);
     setAddress(DEMO_SCAN.address);
-    void run(() => scanAddress(DEMO_SCAN.address, DEMO_SCAN.chainId));
+    void run(() => scanAddress(DEMO_SCAN.address, DEMO_SCAN.chainId, readEtherscanKey()));
   }
 
   function onSourceSubmit(event: FormEvent) {
@@ -167,8 +168,8 @@ export function ScanPage({ onResult, loadError }: Props) {
         </button>
       </form>
       <p className="scan-hint">
-        Uses Sourcify, then Etherscan (needs a key in .env), then Blockscout — on the chain you pick.
-        Explorer-only contracts miss on the public demo (no Etherscan key).
+        Uses Sourcify, then Etherscan if you saved a key in Settings, then Blockscout.
+        Explorer-only contracts miss on the public demo until you add a key (this browser only).
       </p>
       <p className="scan-hint">
         <button className="btn-text" type="button" disabled={busy} onClick={onTryDemo}>

@@ -32,10 +32,17 @@ def _timeout_seconds() -> float:
         return 120.0
 
 
+def _redact(text: str, secret: str | None) -> str:
+    if secret and secret in text:
+        return text.replace(secret, "[redacted]")
+    return text
+
+
 def _execute_scan(body: ScanRequest) -> ScanResult:
     if body.address:
         spec = resolve_chain(body.chain_id)
-        target = fetch_scan_target(body.address, chain_id=spec.id)
+        key = body.etherscan_api_key
+        target = fetch_scan_target(body.address, api_key=key, chain_id=spec.id)
         result = apply_scan_target(scan_verified(target.analyzed, network=spec.network), target)
         if body.include_onchain:
             try:
@@ -43,6 +50,7 @@ def _execute_scan(body: ScanRequest) -> ScanResult:
                     body.address,
                     verified=True,
                     rpc_url=spec.rpc_url(),
+                    api_key=key,
                     network=spec.network,
                     chain_id=spec.id,
                 )
@@ -81,14 +89,17 @@ def create_scan(body: ScanRequest, request: Request) -> dict:
             detail="Scan timed out. First-time solc download can be slow; try again, or set SCAN_TIMEOUT_SEC.",
         ) from None
     except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=_redact(str(exc), body.etherscan_api_key)) from exc
     except UnsupportedChainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
         if body.address:
-            raise HTTPException(status_code=502, detail=f"Verified source lookup failed: {exc}") from exc
+            raise HTTPException(
+                status_code=502,
+                detail=_redact(f"Verified source lookup failed: {exc}", body.etherscan_api_key),
+            ) from exc
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         release_scan_slot()

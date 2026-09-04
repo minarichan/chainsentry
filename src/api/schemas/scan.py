@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from scanner.models import Finding, ScanResult
 from scanner.scoring import compute_score
@@ -15,6 +15,19 @@ class ScanRequest(BaseModel):
         default=1,
         description="EVM chain: 1 Ethereum, 8453 Base, 42161 Arbitrum One",
     )
+    etherscan_api_key: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Optional Etherscan V2 key for this request only. Not stored with the report.",
+    )
+
+    @field_validator("etherscan_api_key", mode="before")
+    @classmethod
+    def _blank_key_is_none(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
 
 
 class ScanSummary(BaseModel):

@@ -4,20 +4,21 @@ import { DetectorsPage } from "./pages/DetectorsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { ReportPage } from "./pages/ReportPage";
 import { ScanPage } from "./pages/ScanPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { forgetScan, rememberScan } from "./data/history";
 import { getScan } from "./services/api";
 import type { ScanResult } from "./types/scan";
 
-type View = "scan" | "report" | "detectors" | "history";
+type View = "scan" | "report" | "detectors" | "history" | "settings";
 
 function parseHash(): { view: View; id: string | null } {
   const path = window.location.hash.replace(/^#\/?/, "");
   if (path === "detectors") return { view: "detectors", id: null };
   if (path === "history") return { view: "history", id: null };
+  if (path === "settings") return { view: "settings", id: null };
   if (path === "report" || path.startsWith("report/")) {
     const id = path === "report" ? "" : path.slice("report/".length).split(/[/?#]/)[0];
-    if (id) return { view: "report", id };
-    return { view: "scan", id: null };
+    return { view: "report", id: id || null };
   }
   return { view: "scan", id: null };
 }
@@ -89,14 +90,7 @@ export default function App() {
                 Scan
               </a>
             )}
-            <a
-              className={`nav-link ${view === "report" ? "active" : ""} ${result ? "" : "is-disabled"}`}
-              href={reportHref}
-              aria-disabled={!result}
-              onClick={(event) => {
-                if (!result) event.preventDefault();
-              }}
-            >
+            <a className={`nav-link ${view === "report" ? "active" : ""}`} href={reportHref}>
               Report
             </a>
             {view === "history" ? (
@@ -114,6 +108,15 @@ export default function App() {
             >
               Detectors
             </a>
+            {view === "settings" ? (
+              <span className="nav-link active" aria-current="page">
+                Settings
+              </span>
+            ) : (
+              <a className="nav-link" href="#/settings">
+                Settings
+              </a>
+            )}
           </div>
         </header>
 
@@ -122,10 +125,26 @@ export default function App() {
             <p className="muted">Loading report…</p>
           ) : view === "history" ? (
             <HistoryPage />
+          ) : view === "settings" ? (
+            <SettingsPage />
           ) : view === "detectors" ? (
             <DetectorsPage />
           ) : view === "report" && result ? (
             <ReportPage result={result} onReset={showScan} onResult={setResult} />
+          ) : view === "report" ? (
+            <>
+              <p className="kicker">No scan yet</p>
+              <h1>Security report</h1>
+              <p className="lede">
+                Run a scan first. After it finishes, this page holds the findings and a
+                shareable link.
+              </p>
+              <p>
+                <a className="btn" href="#/" onClick={showScan}>
+                  Scan a contract
+                </a>
+              </p>
+            </>
           ) : (
             <ScanPage
               loadError={loadError}

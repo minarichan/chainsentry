@@ -143,7 +143,7 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format sarif
 
 ## GitHub Action
 
-Other repos can run ChainSentry on their Solidity and publish Markdown + SARIF. It does **not** scan every repository on an account - only a repo that adds this workflow.
+Other repos can run ChainSentry on their Solidity and publish Markdown + SARIF. It does **not** scan every repository on an account – only a repo that adds this workflow.
 
 ```yaml
 # .github/workflows/chainsentry.yml

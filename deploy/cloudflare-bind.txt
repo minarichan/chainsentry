@@ -1,0 +1,6 @@
+; Import in Cloudflare → DNS → Records → Import BIND.
+; Then set both records to Proxied (orange cloud).
+; SSL/TLS → Overview → Flexible. Edge Certificates → Always Use HTTPS = On.
+$ORIGIN chainsentry.dev.
+@	1	IN	A	162.35.168.32
+www	1	IN	CNAME	chainsentry.dev.

@@ -47,6 +47,13 @@ data/*.sqlite
 data/*.db
 !data/.gitkeep
 
+# VPS / SSH secrets (never commit)
+deploy/secrets.env
+deploy/*.pem
+deploy/id_*
+deploy/askpass.cmd
+!deploy/id_*.pub
+
 # Solc
 .solcx/
 

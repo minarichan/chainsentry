@@ -1,0 +1,51 @@
+# Production stack on the VPS (UI + API in one image, same as the old Railway Dockerfile).
+# From /opt/chainsentry:
+#   docker compose -f deploy/compose.yml --env-file .env up -d --build
+#
+# Bind 80 so http://VPS_IP/#/ works. Cloudflare Tunnel (profile "tunnel")
+# should use 127.0.0.1 only — start with: --profile tunnel
+
+name: chainsentry
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      SCAN_DB_PATH: /app/data/scans.sqlite
+      FRONTEND_DIST: /app/frontend/dist
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    volumes:
+      - chainsentry-data:/app/data
+    ports:
+      - "${HTTP_BIND:-0.0.0.0:80}:8000"
+    mem_limit: 1536m
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  chainsentry-data:

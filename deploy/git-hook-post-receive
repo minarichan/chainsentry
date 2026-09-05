@@ -1,0 +1,16 @@
+#!/bin/bash
+# Install on the VPS as /opt/chainsentry.git/hooks/post-receive (chmod +x).
+set -euo pipefail
+APP=/opt/chainsentry
+unset GIT_INDEX_FILE
+git --git-dir=/opt/chainsentry.git --work-tree="$APP" checkout -f
+cd "$APP"
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+docker compose -f deploy/compose.yml up -d --build
+docker compose -f deploy/compose.yml exec -T web python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+echo "ChainSentry deployed."

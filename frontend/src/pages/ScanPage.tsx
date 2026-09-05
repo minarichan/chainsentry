@@ -201,7 +201,9 @@ export function ScanPage({ onResult, loadError }: Props) {
         <form className="panel" onSubmit={onSourceSubmit}>
           <div className="panel-head">
             <h2>Paste source</h2>
-            <span className="muted">Local files are not fetched from chain</span>
+            <span className="muted">
+              One file only: flatten project imports (src/…) and OpenZeppelin, or scan a verified address
+            </span>
           </div>
           <label>
             Solidity source

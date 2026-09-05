@@ -62,12 +62,18 @@ _cors_origins = [
 _extra = (os.getenv("CORS_ORIGINS") or "").strip()
 if _extra:
     _cors_origins.extend(item.strip() for item in _extra.split(",") if item.strip())
+_public = (os.getenv("PUBLIC_URL") or "").strip().rstrip("/")
+if _public and _public not in _cors_origins:
+    _cors_origins.append(_public)
+
+# Same-origin UI+API does not need CORS. Gateways (eth.limo / eth.link) do if the SPA is opened there.
+_cors_regex = (os.getenv("CORS_ORIGIN_REGEX") or r"https://([a-z0-9-]+\.)*eth\.(limo|link)").strip() or None
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.up\.railway\.app",
+    allow_origin_regex=_cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

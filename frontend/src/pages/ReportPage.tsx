@@ -12,6 +12,11 @@ function formatCompilerErrors(errors: string[]) {
   return `${text.slice(0, 2500)}\n… (truncated)`;
 }
 
+function compilerLogBody(errors: string[]) {
+  const rest = errors.filter((item) => !item.startsWith("This source imports"));
+  return formatCompilerErrors(rest.length ? rest : errors.slice(1));
+}
+
 function uniqueFindings(findings: Finding[]): Finding[] {
   const seen = new Map<string, Finding>();
   for (const finding of findings) {
@@ -51,6 +56,7 @@ export function ReportPage({
   const [copied, setCopied] = useState(false);
   const findings = uniqueFindings(result.findings);
   const active = findings.filter((finding) => !finding.muted);
+  const compilerDump = compilerLogBody(result.compiler_errors);
 
   async function onExport(kind: "markdown" | "sarif") {
     setExportError(null);
@@ -131,9 +137,12 @@ export function ReportPage({
         {tab === "overview" && (
           <div>
             <ScanSummary result={result} findings={active} onOpenOnchain={() => setTab("onchain")} />
-            {result.compiler_errors.length > 0 && (
-              <pre className="error">{formatCompilerErrors(result.compiler_errors)}</pre>
-            )}
+            {compilerDump.trim() ? (
+              <details className="compiler-log">
+                <summary>Compiler output</summary>
+                <pre className="error">{compilerDump}</pre>
+              </details>
+            ) : null}
           </div>
         )}
 

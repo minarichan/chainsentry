@@ -828,6 +828,19 @@ textarea {
   border-radius: 12px;
 }
 
+.compiler-log {
+  margin-top: 16px;
+}
+.compiler-log summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+}
+.compiler-log .error {
+  margin-top: 8px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

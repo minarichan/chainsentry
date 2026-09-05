@@ -218,16 +218,11 @@ docker compose up --build
 
 The UI proxies `/api` to the API container. Stop a local uvicorn on port 8000 first if that port is already in use.
 
-## Railway
+## Production (InterServer VPS)
 
-One service serves the UI and API from the root `Dockerfile`. From the repo root, after `railway login`:
+The UI and API are one image (`Dockerfile`). Hash routes (`/#/`, `/#/report/<id>`) stay in the browser.
 
-```bash
-railway init
-railway up
-```
-
-In the Railway dashboard: set the service to **at least 1 GB RAM**, attach a volume at `/app/data`, and generate a public domain. Leave `ETHERSCAN_API_KEY` unset for a Sourcify-only public demo. Optional: `CORS_ORIGINS` (comma-separated) if the UI is hosted on a different origin.
+On your Windows PC: copy `deploy/secrets.env.example` → `deploy/secrets.env`, then see **`deploy/README.md`** for SSH keys, backup, `bootstrap.ps1` / `push.ps1` / `watch.ps1`, Cloudflare DNS for `chainsentry.dev`, and `chainsentry.eth` records. Do not put SSH passwords in git.
 
 ## Layout
 

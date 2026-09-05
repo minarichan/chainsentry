@@ -81,7 +81,7 @@ Safe twins for those patterns (`SafeReentrancy`, `SafeTokenReentrancy`, `SafeAcc
 
 On the same function, ChainSentry keeps the more specific card: `SC-RANDOMNESS-001` without a second timestamp/access hit, `SC-SELFDESTRUCT-001` / `SC-TXORIGIN-001` without a duplicate access card, and reentrancy without a second `delegatecall` card when that call is already the reentrancy finding.
 
-Slither’s catalog is much larger than twelve AST checks (encoding, upgrades, data races, optimizations, …). Use ChainSentry for address-first triage. Run Slither – and a human review - before you treat a contract as safe.
+Slither’s catalog is much larger than twelve AST checks (encoding, upgrades, data races, optimizations, …). Use ChainSentry for address-first triage. Run Slither – and a human review – before you treat a contract as safe.
 
 ## Quick start (dashboard)
 

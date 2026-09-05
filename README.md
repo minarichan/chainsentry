@@ -81,7 +81,7 @@ Safe twins for those patterns (`SafeReentrancy`, `SafeTokenReentrancy`, `SafeAcc
 
 On the same function, ChainSentry keeps the more specific card: `SC-RANDOMNESS-001` without a second timestamp/access hit, `SC-SELFDESTRUCT-001` / `SC-TXORIGIN-001` without a duplicate access card, and reentrancy without a second `delegatecall` card when that call is already the reentrancy finding.
 
-Slither’s catalog is much larger than twelve AST checks (encoding, upgrades, data races, optimizations, …). Use ChainSentry for address-first triage. Run Slither — and a human review — before you treat a contract as safe.
+Slither’s catalog is much larger than twelve AST checks (encoding, upgrades, data races, optimizations, …). Use ChainSentry for address-first triage. Run Slither – and a human review - before you treat a contract as safe.
 
 ## Quick start (dashboard)
 
@@ -120,7 +120,7 @@ A finished report lives at `#/report/<id>` and is stored in SQLite (`data/scans.
 
 Try a Sourcify-verified mainnet address (no Etherscan key). On the dashboard, **Try Multicall3 on Ethereum** fills this in:
 
-`0xcA11bde05977b3631167028862bE2a173976CA11` — [Multicall3](https://www.multicall3.com/), solc 0.8.12, same address on Base and Arbitrum.
+`0xcA11bde05977b3631167028862bE2a173976CA11` - [Multicall3](https://www.multicall3.com/), solc 0.8.12, same address on Base and Arbitrum.
 
 Contracts that exist only on Etherscan need `ETHERSCAN_API_KEY` in `.env` and a restarted API process. The hosted demo does not set that key.
 
@@ -143,7 +143,7 @@ python -m scanner scan contracts/vulnerable/Reentrancy.sol --format sarif
 
 ## GitHub Action
 
-Other repos can run ChainSentry on their Solidity and publish Markdown + SARIF. It does **not** scan every repository on an account — only a repo that adds this workflow.
+Other repos can run ChainSentry on their Solidity and publish Markdown + SARIF. It does **not** scan every repository on an account - only a repo that adds this workflow.
 
 ```yaml
 # .github/workflows/chainsentry.yml

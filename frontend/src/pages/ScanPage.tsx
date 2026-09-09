@@ -125,48 +125,46 @@ export function ScanPage({ onResult, loadError }: Props) {
   return (
     <>
       <section className="hero-grid">
-        <div>
-          <p className="kicker">Static analysis for Solidity</p>
-          <h1>Security scanner for the on-chain stack</h1>
-          <p className="lede">
-            Paste a verified contract address on Ethereum, Base, or Arbitrum.
-            ChainSentry fetches the source, compiles it, and reports reentrancy,
-            access control, and other SWC issues.
-          </p>
-        </div>
+        <p className="kicker">Static analysis for Solidity</p>
+        <h1>Scan a verified contract</h1>
+        <p className="lede">
+          Paste an address on Ethereum, Base, or Arbitrum. ChainSentry fetches the
+          source, compiles it, and reports reentrancy, access control, and other SWC
+          issues.
+        </p>
       </section>
 
       <form className="scan-bar" id="scan-panel" onSubmit={onAddressSubmit}>
-        <label className="scan-bar-label" htmlFor="scan-chain">
-          Chain
-        </label>
-        <ChainSelect
-          id="scan-chain"
-          value={chainId}
-          disabled={busy}
-          onChange={(next) => {
-            setChainId(next);
-            storeChainId(next);
-          }}
-        />
-        <span className="scan-bar-split" aria-hidden="true" />
-        <label className="scan-bar-label" htmlFor="contract-address">
-          Contract address
-        </label>
-        <input
-          id="contract-address"
-          type="text"
-          className="mono"
-          placeholder="0x…"
-          autoComplete="off"
-          spellCheck={false}
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-        />
-        <button className="btn" disabled={busy} type="submit" aria-label="Scan this address">
-          {busy && !showSource ? "Scanning…" : "Scan"}
-        </button>
-      </form>
+            <label className="scan-bar-label" htmlFor="scan-chain">
+              Chain
+            </label>
+            <ChainSelect
+              id="scan-chain"
+              value={chainId}
+              disabled={busy}
+              onChange={(next) => {
+                setChainId(next);
+                storeChainId(next);
+              }}
+            />
+            <span className="scan-bar-split" aria-hidden="true" />
+            <label className="scan-bar-label" htmlFor="contract-address">
+              Contract address
+            </label>
+            <input
+              id="contract-address"
+              type="text"
+              className="mono"
+              placeholder="0x…"
+              autoComplete="off"
+              spellCheck={false}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <button className="btn" disabled={busy} type="submit" aria-label="Scan this address">
+              {busy && !showSource ? "Scanning…" : "Scan"}
+            </button>
+          </form>
       <p className="scan-hint">
         Uses Sourcify, then Etherscan if you saved a key in Settings, then Blockscout.
         Explorer-only contracts miss on the public demo until you add a key (this browser only).
@@ -174,13 +172,11 @@ export function ScanPage({ onResult, loadError }: Props) {
       <p className="scan-hint">
         <button className="btn-text" type="button" disabled={busy} onClick={onTryDemo}>
           Try {DEMO_SCAN.label} on {DEMO_SCAN.network}
-        </button>
-        {" "}
+        </button>{" "}
         <span className="mono">{DEMO_SCAN.address}</span>
         {" — Sourcify-verified, no key needed."}
       </p>
       {busy ? <p className="scan-progress">{SCAN_STEPS[step]}</p> : null}
-
       {error ? <p className="stop">{error}</p> : null}
       {!error && loadError ? <p className="muted">{loadError}</p> : null}
 
@@ -202,7 +198,8 @@ export function ScanPage({ onResult, loadError }: Props) {
           <div className="panel-head">
             <h2>Paste source</h2>
             <span className="muted">
-              One file only: flatten project imports (src/…) and OpenZeppelin, or scan a verified address
+              One file only: flatten project imports (src/…) and OpenZeppelin, or scan a
+              verified address
             </span>
           </div>
           <label>

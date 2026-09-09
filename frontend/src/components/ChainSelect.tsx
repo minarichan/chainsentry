@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { ChainIcon } from "./ChainIcon";
 import { SCAN_CHAINS, type ScanChainId } from "../data/chains";
 
 interface Props {
@@ -77,6 +78,7 @@ export function ChainSelect({ id, value, disabled, onChange }: Props) {
         onClick={() => setOpen((next) => !next)}
         onKeyDown={onTriggerKey}
       >
+        <ChainIcon chainId={current.id} />
         {current.label}
         <svg className="chain-select-chevron" viewBox="0 0 12 8" aria-hidden="true">
           <path
@@ -103,6 +105,7 @@ export function ChainSelect({ id, value, disabled, onChange }: Props) {
                   onMouseEnter={() => setActive(index)}
                   onClick={() => pick(chain.id)}
                 >
+                  <ChainIcon chainId={chain.id} />
                   {chain.label}
                 </button>
               </li>

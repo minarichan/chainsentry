@@ -11,6 +11,14 @@ import type { ScanResult } from "./types/scan";
 
 type View = "scan" | "report" | "detectors" | "history" | "settings";
 
+const NAV: { view: View; href: string; label: string }[] = [
+  { view: "scan", href: "#/", label: "Scan" },
+  { view: "report", href: "#/report", label: "Report" },
+  { view: "history", href: "#/history", label: "History" },
+  { view: "detectors", href: "#/detectors", label: "Detectors" },
+  { view: "settings", href: "#/settings", label: "Settings" },
+];
+
 function parseHash(): { view: View; id: string | null } {
   const path = window.location.hash.replace(/^#\/?/, "");
   if (path === "detectors") return { view: "detectors", id: null };
@@ -59,7 +67,6 @@ export default function App() {
     window.addEventListener("hashchange", onHash);
     onHash();
     return () => window.removeEventListener("hashchange", onHash);
-    // Only run on mount; later hash changes still fire the listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -80,44 +87,38 @@ export default function App() {
             <EthMark />
             ChainSentry
           </a>
-          <div className="nav-pill">
-            {view === "scan" ? (
-              <span className="nav-link active" aria-current="page">
-                Scan
-              </span>
-            ) : (
-              <a className="nav-link" href="#/">
-                Scan
-              </a>
-            )}
-            <a className={`nav-link ${view === "report" ? "active" : ""}`} href={reportHref}>
-              Report
-            </a>
-            {view === "history" ? (
-              <span className="nav-link active" aria-current="page">
-                History
-              </span>
-            ) : (
-              <a className="nav-link" href="#/history">
-                History
-              </a>
-            )}
-            <a
-              className={`nav-link ${view === "detectors" ? "active" : ""}`}
-              href="#/detectors"
-            >
-              Detectors
-            </a>
-            {view === "settings" ? (
-              <span className="nav-link active" aria-current="page">
-                Settings
-              </span>
-            ) : (
-              <a className="nav-link" href="#/settings">
-                Settings
-              </a>
-            )}
-          </div>
+          <nav className="nav-links" aria-label="Main">
+            {NAV.map((item) => {
+              const href = item.view === "report" ? reportHref : item.href;
+              const active = view === item.view;
+              if (active) {
+                return (
+                  <span key={item.view} className="nav-link active" aria-current="page">
+                    {item.label}
+                  </span>
+                );
+              }
+              return (
+                <a key={item.view} className="nav-link" href={href}>
+                  {item.label}
+                </a>
+              );
+            })}
+          </nav>
+          <a
+            className="nav-github"
+            href="https://github.com/minarichan/chainsentry"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.17-3.37-1.17-.45-1.15-1.1-1.46-1.1-1.46-.9-.62.07-.6.07-.6 1 .07 1.52 1.03 1.52 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.95 0-1.1.39-1.99 1.03-2.7-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.03a9.56 9.56 0 0 1 5 0c1.91-1.3 2.75-1.03 2.75-1.03.55 1.37.2 2.39.1 2.64.64.71 1.03 1.6 1.03 2.7 0 3.85-2.34 4.7-4.57 4.95.36.31.68.92.68 1.86v2.76c0 .26.18.58.69.48A10 10 0 0 0 12 2z"
+              />
+            </svg>
+          </a>
         </header>
 
         <main className="shell">

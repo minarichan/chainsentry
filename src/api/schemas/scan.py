@@ -9,7 +9,7 @@ from scanner.scoring import compute_score
 class ScanRequest(BaseModel):
     source: str | None = Field(default=None, description="Solidity source code")
     filename: str = "Contract.sol"
-    address: str | None = Field(default=None, description="Verified contract address")
+    address: str | None = Field(default=None, description="Verified contract address or ENS name")
     include_onchain: bool = True
     chain_id: Literal[1, 8453, 42161] = Field(
         default=1,

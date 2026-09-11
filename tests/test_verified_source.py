@@ -98,6 +98,36 @@ def test_fetch_error_mentions_missing_etherscan_key(monkeypatch) -> None:
         assert "0x0000000000000000000000000000000000000001" not in message
 
 
+def test_fetch_error_for_on_chain_contract_is_explicit(monkeypatch) -> None:
+    monkeypatch.setattr("scanner.etherscan._api_key", lambda explicit=None: "")
+    monkeypatch.setattr(
+        "scanner.etherscan.fetch_from_sourcify",
+        lambda address, chain_id=None: (_ for _ in ()).throw(
+            SourceNotVerifiedError("not on sourcify")
+        ),
+    )
+    monkeypatch.setattr(
+        "scanner.etherscan.fetch_from_blockscout",
+        lambda address, chain_id=None: (_ for _ in ()).throw(
+            SourceNotVerifiedError("not on blockscout")
+        ),
+    )
+    try:
+        fetch_verified_source(
+            "0x0000000000000000000000000000000000000001",
+            on_chain=True,
+            lookup="example.eth",
+        )
+        raise AssertionError("expected SourceNotVerifiedError")
+    except SourceNotVerifiedError as exc:
+        message = str(exc)
+        assert "example.eth" in message
+        assert "is a contract" in message
+        assert "not verified" in message
+        assert "does not scan bytecode" in message
+        assert "ETHERSCAN_API_KEY" in message
+
+
 def test_etherscan_hourly_cap_skips_to_blockscout(monkeypatch) -> None:
     from scanner.etherscan import EtherscanBudgetError, reset_etherscan_budget_for_tests
 

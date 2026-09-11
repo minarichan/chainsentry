@@ -22,6 +22,17 @@ class ChainSpec:
     def rpc_url(self) -> str:
         return (os.getenv(self.rpc_env) or "").strip() or self.default_rpc
 
+    def rpc_urls(self, extra: str | None = None) -> list[str]:
+        """Preferred RPC, then public fallbacks. Deduped, order preserved."""
+        preferred = (extra or "").strip()
+        env = (os.getenv(self.rpc_env) or "").strip()
+        extras = RPC_FALLBACKS.get(self.id, ())
+        out: list[str] = []
+        for url in (preferred, env, self.default_rpc, *extras):
+            if url and url not in out:
+                out.append(url)
+        return out
+
     def blockscout_contract_url(self, address: str) -> str:
         if self.id == 1:
             custom = (os.getenv("BLOCKSCOUT_API_URL") or "").strip().rstrip("/")
@@ -36,7 +47,7 @@ CHAINS: dict[int, ChainSpec] = {
         label="Ethereum",
         network="Ethereum Mainnet",
         rpc_env="ETH_RPC_URL",
-        default_rpc="https://eth.llamarpc.com",
+        default_rpc="https://ethereum.publicnode.com",
         blockscout_base="https://eth.blockscout.com/api/v2/smart-contracts",
     ),
     8453: ChainSpec(
@@ -58,6 +69,16 @@ CHAINS: dict[int, ChainSpec] = {
 }
 
 SUPPORTED_CHAIN_IDS = tuple(CHAINS)
+
+RPC_FALLBACKS: dict[int, tuple[str, ...]] = {
+    1: (
+        "https://cloudflare-eth.com",
+        "https://1rpc.io/eth",
+        "https://eth.llamarpc.com",
+    ),
+    8453: ("https://base.publicnode.com",),
+    42161: ("https://arbitrum-one.publicnode.com",),
+}
 
 
 def default_chain_id() -> int:

@@ -29,6 +29,14 @@ def test_env_default_ignored_when_explicit(monkeypatch) -> None:
     assert resolve_chain(8453).id == 8453
 
 
+def test_ethereum_rpc_urls_fall_back_past_llamarpc(monkeypatch) -> None:
+    monkeypatch.setenv("ETH_RPC_URL", "https://eth.llamarpc.com")
+    urls = resolve_chain(1).rpc_urls()
+    assert urls[0] == "https://eth.llamarpc.com"
+    assert "https://ethereum.publicnode.com" in urls
+    assert "https://cloudflare-eth.com" in urls
+
+
 def test_custom_blockscout_only_for_ethereum(monkeypatch) -> None:
     monkeypatch.setenv("BLOCKSCOUT_API_URL", "https://custom.example/api/v2/smart-contracts")
     assert resolve_chain(1).blockscout_contract_url("0x1").startswith("https://custom.example/")

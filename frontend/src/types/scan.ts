@@ -80,6 +80,7 @@ export interface ScanResult {
   filename: string;
   network: string;
   address: string | null;
+  lookup_name?: string | null;
   implementation_address?: string | null;
   analyzed_address?: string | null;
   analyzed_name?: string | null;

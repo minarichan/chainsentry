@@ -161,6 +161,10 @@ span.nav-link {
   background: rgba(18, 18, 18, 0.05);
 }
 
+.nav-toggle {
+  display: none;
+}
+
 .nav-github {
   width: 36px;
   height: 36px;
@@ -982,21 +986,61 @@ th {
 
 @media (max-width: 834px) {
   .nav {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
     padding: 16px 16px 0;
-    gap: 12px;
+    gap: 4px 8px;
+  }
+  .logo {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .nav-toggle {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
   }
   .nav-github {
-    order: -1;
-    align-self: flex-end;
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .nav-toggle svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+  .nav-toggle:hover,
+  .nav-toggle[aria-expanded="true"] {
+    background: rgba(18, 18, 18, 0.06);
   }
   .nav-links {
-    justify-content: flex-start;
+    display: none;
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 4px 0 8px;
+  }
+  .nav-links.is-open {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
   .nav-link {
-    padding: 8px 10px;
-    font-size: 13px;
+    width: 100%;
+    padding: 12px 10px;
+    font-size: 15px;
   }
   .shell {
     padding: 20px 16px 80px;

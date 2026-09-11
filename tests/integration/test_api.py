@@ -312,6 +312,62 @@ def test_scan_unverified_address_is_422_not_500(monkeypatch) -> None:
     assert "500" not in detail
 
 
+def test_scan_invalid_address_is_400(monkeypatch) -> None:
+    from scanner.lookup import InvalidScanTargetError
+    from api.routes import scan as scan_routes
+
+    def fake_target(address, api_key=None, chain_id=None):
+        raise InvalidScanTargetError("Enter a 0x address or an ENS name (example.eth).")
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={"address": "not-an-address", "include_onchain": False},
+    )
+    assert response.status_code == 400
+    assert "ENS name" in response.json()["detail"]
+
+
+def test_scan_eoa_is_422_not_a_contract(monkeypatch) -> None:
+    from scanner.lookup import NotAContractError
+    from api.routes import scan as scan_routes
+
+    def fake_target(address, api_key=None, chain_id=None):
+        raise NotAContractError(
+            "0x0000000000000000000000000000000000000001 is not a contract on Ethereum. "
+            "Wallets and empty addresses have no Solidity to scan."
+        )
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={
+            "address": "0x0000000000000000000000000000000000000001",
+            "include_onchain": False,
+        },
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "not a contract" in detail.lower()
+    assert "Wallets" in detail
+
+
+def test_scan_ens_unresolved_is_422(monkeypatch) -> None:
+    from scanner.lookup import NameNotResolvedError
+    from api.routes import scan as scan_routes
+
+    def fake_target(address, api_key=None, chain_id=None):
+        raise NameNotResolvedError("ENS has no address for missing.eth.")
+
+    monkeypatch.setattr(scan_routes, "fetch_scan_target", fake_target)
+    response = client.post(
+        "/scan",
+        json={"address": "missing.eth", "include_onchain": False},
+    )
+    assert response.status_code == 422
+    assert "missing.eth" in response.json()["detail"]
+
+
 def test_mute_finding_and_rescan_same_address(tmp_path, monkeypatch) -> None:
     from api.limits import reset_limits_for_tests
     from api.routes import scan as scan_routes

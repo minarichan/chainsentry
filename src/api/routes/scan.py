@@ -16,6 +16,7 @@ from api.store import finding_mute_key, list_muted_keys, load_scan, save_scan, s
 from scanner.chains import UnsupportedChainError, resolve_chain
 from scanner.engine import scan_source, scan_verified
 from scanner.etherscan import SourceNotVerifiedError, UnsupportedCompilerError
+from scanner.lookup import InvalidScanTargetError, NameNotResolvedError, NotAContractError
 from scanner.models import ScanResult
 from scanner.onchain import analyze_address
 from scanner.proxy import apply_scan_target, fetch_scan_target
@@ -47,7 +48,7 @@ def _execute_scan(body: ScanRequest) -> ScanResult:
         if body.include_onchain:
             try:
                 onchain = analyze_address(
-                    body.address,
+                    target.requested,
                     verified=True,
                     rpc_url=spec.rpc_url(),
                     api_key=key,
@@ -88,7 +89,14 @@ def create_scan(body: ScanRequest, request: Request) -> dict:
             status_code=504,
             detail="Scan timed out. First-time solc download can be slow; try again, or set SCAN_TIMEOUT_SEC.",
         ) from None
-    except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
+    except InvalidScanTargetError as exc:
+        raise HTTPException(status_code=400, detail=_redact(str(exc), body.etherscan_api_key)) from exc
+    except (
+        SourceNotVerifiedError,
+        UnsupportedCompilerError,
+        NameNotResolvedError,
+        NotAContractError,
+    ) as exc:
         raise HTTPException(status_code=422, detail=_redact(str(exc), body.etherscan_api_key)) from exc
     except UnsupportedChainError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

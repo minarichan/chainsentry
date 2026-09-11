@@ -26,6 +26,7 @@ contract Reentrancy {
 `;
 
 const SCAN_STEPS = [
+  "Resolving the name and checking the address…",
   "Fetching verified source…",
   "Downloading solc if needed, then compiling…",
   "Running detectors…",
@@ -94,7 +95,7 @@ export function ScanPage({ onResult, loadError }: Props) {
     event.preventDefault();
     const trimmed = address.trim();
     if (!trimmed) {
-      setError("Provide a contract address.");
+      setError("Provide a contract address or ENS name.");
       return;
     }
     void run(() => scanAddress(trimmed, chainId, readEtherscanKey()));
@@ -149,13 +150,13 @@ export function ScanPage({ onResult, loadError }: Props) {
             />
             <span className="scan-bar-split" aria-hidden="true" />
             <label className="scan-bar-label" htmlFor="contract-address">
-              Contract address
+              Contract address or ENS
             </label>
             <input
               id="contract-address"
               type="text"
               className="mono"
-              placeholder="0x…"
+              placeholder="0x… or name.eth"
               autoComplete="off"
               spellCheck={false}
               value={address}
@@ -166,8 +167,9 @@ export function ScanPage({ onResult, loadError }: Props) {
             </button>
           </form>
       <p className="scan-hint">
-        Uses Sourcify, then Etherscan if you saved a key in Settings, then Blockscout.
-        Explorer-only contracts miss on the public demo until you add a key (this browser only).
+        Paste a 0x address or an ENS name. Uses Sourcify, then Etherscan if you saved a key in
+        Settings, then Blockscout. Explorer-only contracts miss on the public demo until you add a
+        key (this browser only). Wallets and unverified bytecode stop before compile.
       </p>
       <p className="scan-hint">
         <button className="btn-text" type="button" disabled={busy} onClick={onTryDemo}>

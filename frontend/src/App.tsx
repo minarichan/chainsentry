@@ -36,9 +36,11 @@ export default function App() {
   const [view, setView] = useState<View>(() => parseHash().view);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     function onHash() {
+      setNavOpen(false);
       const next = parseHash();
       setView(next.view);
       if (next.view === "report" && next.id && next.id !== result?.id) {
@@ -70,6 +72,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setNavOpen(false);
+    }
+    function onResize() {
+      if (window.innerWidth >= 835) setNavOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
   function showScan() {
     setResult(null);
     setLoadError(null);
@@ -87,7 +104,30 @@ export default function App() {
             <EthMark />
             ChainSentry
           </a>
-          <nav className="nav-links" aria-label="Main">
+          <button
+            type="button"
+            className="nav-toggle"
+            aria-expanded={navOpen}
+            aria-controls="site-nav"
+            aria-label={navOpen ? "Close menu" : "Open menu"}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {navOpen ? (
+                <path
+                  fill="currentColor"
+                  d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z"
+                />
+              ) : (
+                <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+              )}
+            </svg>
+          </button>
+          <nav
+            id="site-nav"
+            className={navOpen ? "nav-links is-open" : "nav-links"}
+            aria-label="Main"
+          >
             {NAV.map((item) => {
               const href = item.view === "report" ? reportHref : item.href;
               const active = view === item.view;
@@ -150,7 +190,8 @@ export default function App() {
             <ScanPage
               loadError={loadError}
               onResult={(next) => {
-                const label = next.address || next.analyzed_name || next.filename;
+                const label =
+                  next.lookup_name || next.address || next.analyzed_name || next.filename;
                 rememberScan(next.id, label);
                 setResult(next);
                 setLoadError(null);

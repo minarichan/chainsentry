@@ -304,6 +304,7 @@ class ScanResult:
     source_role: str = "declared"
     proxy_note: Optional[str] = None
     chain_id: Optional[int] = None
+    lookup_name: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -315,6 +316,7 @@ class ScanResult:
             "implementation_address": self.implementation_address,
             "analyzed_address": self.analyzed_address,
             "analyzed_name": self.analyzed_name,
+            "lookup_name": self.lookup_name,
             "source_role": self.source_role,
             "proxy_note": self.proxy_note,
             "verified": self.verified,
@@ -432,6 +434,7 @@ class ScanResult:
             implementation_address=data.get("implementation_address"),
             analyzed_address=data.get("analyzed_address"),
             analyzed_name=data.get("analyzed_name"),
+            lookup_name=data.get("lookup_name"),
             source_role=str(data.get("source_role") or "declared"),
             proxy_note=data.get("proxy_note"),
             chain_id=int(data["chain_id"]) if data.get("chain_id") not in {None, ""} else None,

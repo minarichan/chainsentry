@@ -257,6 +257,14 @@ def test_safe_transfer_from_no_false_positive() -> None:
     assert "SC-TRANSFERFROM-001" not in _ids(SAFE / "SafeTransferFrom.sol")
 
 
+def test_safe_twins_for_remaining_classes() -> None:
+    assert "SC-TXORIGIN-001" not in _ids(SAFE / "SafeTxOrigin.sol")
+    assert "SC-UNCHECKED-001" not in _ids(SAFE / "SafeUncheckedCall.sol")
+    assert "SC-DELEGATECALL-001" not in _ids(SAFE / "SafeDelegateCall.sol")
+    assert "SC-SELFDESTRUCT-001" not in _ids(SAFE / "SafeSelfDestruct.sol")
+    assert "SC-RANDOMNESS-001" not in _ids(SAFE / "SafeRandomness.sol")
+
+
 def test_token_reentrancy_not_arbitrary_from() -> None:
     assert "SC-TRANSFERFROM-001" not in _ids(VULN / "TokenReentrancy.sol")
 

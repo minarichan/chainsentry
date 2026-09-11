@@ -12,6 +12,7 @@ load_environment()
 
 from scanner.engine import scan_file, scan_verified, summarize_contract
 from scanner.etherscan import SourceNotVerifiedError, UnsupportedCompilerError
+from scanner.lookup import InvalidScanTargetError, NameNotResolvedError, NotAContractError
 from scanner.models import ScanResult, Severity
 from scanner.onchain import analyze_address
 from scanner.proxy import apply_scan_target, fetch_scan_target
@@ -116,7 +117,7 @@ def main() -> None:
 
 @main.command()
 @click.argument("path", required=False)
-@click.option("--address", "address", default=None, help="Verified contract address (Sourcify / Etherscan / Blockscout).")
+@click.option("--address", "address", default=None, help="Verified contract address or ENS name (Sourcify / Etherscan / Blockscout).")
 @click.option(
     "--chain-id",
     "chain_id",
@@ -145,13 +146,21 @@ def scan(
         spec = resolve_chain(int(chain_id) if chain_id else None)
         try:
             target = fetch_scan_target(address, chain_id=spec.id)
-        except (SourceNotVerifiedError, UnsupportedCompilerError) as exc:
+        except InvalidScanTargetError as exc:
+            click.secho(str(exc), fg="red")
+            raise SystemExit(2) from exc
+        except (
+            SourceNotVerifiedError,
+            UnsupportedCompilerError,
+            NameNotResolvedError,
+            NotAContractError,
+        ) as exc:
             click.secho(str(exc), fg="red")
             raise SystemExit(3) from exc
         result = apply_scan_target(scan_verified(target.analyzed, network=spec.network), target)
         try:
             onchain = analyze_address(
-                address,
+                target.requested,
                 verified=True,
                 rpc_url=spec.rpc_url(),
                 network=spec.network,

@@ -40,7 +40,9 @@ export function Overview({ result, findings }: { result: ScanResult; findings?: 
         <h2 className="score-name">{name}</h2>
         <p className="muted">
           {result.address
-            ? `${result.network} · Verified on-chain source`
+            ? `${result.network} · Verified on-chain source${
+                result.lookup_name ? ` · ${result.lookup_name}` : ""
+              }`
             : `${result.network} · ${result.filename}`}
           {result.solc_version ? ` · solc ${result.solc_version}` : ""}
           {others ? ` · ${result.contracts.length} types` : ""}

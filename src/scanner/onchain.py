@@ -56,6 +56,38 @@ def parse_eip1167_implementation(code: bytes) -> Optional[str]:
         return None
 
 
+EIP7702_PREFIX = bytes.fromhex("ef0100")
+
+
+def contract_code_at(
+    address: str,
+    *,
+    rpc_url: Optional[str] = None,
+    chain_id: Optional[int] = None,
+) -> Optional[bytes]:
+    """Runtime bytecode, or None if every RPC call failed."""
+    checksum = Web3.to_checksum_address(address)
+    spec = resolve_chain(chain_id)
+    for url in spec.rpc_urls(rpc_url):
+        try:
+            w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": 15}))
+            return bytes(w3.eth.get_code(checksum))
+        except Exception:
+            continue
+    return None
+
+
+def runtime_kind(code: Optional[bytes]) -> str:
+    """empty | eip7702 | contract | unknown (RPC failed)."""
+    if code is None:
+        return "unknown"
+    if not code:
+        return "empty"
+    if code.startswith(EIP7702_PREFIX) and len(code) >= 23:
+        return "eip7702"
+    return "contract"
+
+
 def read_eip1167_implementation(address: str, rpc_url: Optional[str] = None) -> Optional[str]:
     try:
         w3 = _web3(rpc_url)

@@ -14,11 +14,18 @@ from scanner.etherscan import (
     VerifiedContract,
     fetch_verified_source,
 )
+from scanner.lookup import (
+    NotAContractError,
+    describe_target,
+    resolve_scan_input,
+)
 from scanner.models import ScanResult
 from scanner.onchain import (
+    contract_code_at,
     read_beacon_implementation,
     read_eip1167_implementation,
     read_eip1967_implementation,
+    runtime_kind,
 )
 
 ZERO = "0x0000000000000000000000000000000000000000"
@@ -104,6 +111,7 @@ class ScanTarget:
     implementation: Optional[str]
     source_role: str
     note: Optional[str] = None
+    lookup: Optional[str] = None
 
 
 def fetch_scan_target(
@@ -111,17 +119,41 @@ def fetch_scan_target(
     api_key: Optional[str] = None,
     chain_id: Optional[int] = None,
 ) -> ScanTarget:
-    """Fetch verified source, following a proxy and one extra beacon/clone hop."""
+    """Resolve ENS, require contract code, then fetch verified source (proxy hops included)."""
     spec = resolve_chain(chain_id)
-    requested = checksum_address(address)
-    declared = fetch_verified_source(requested, api_key=api_key, chain_id=spec.id)
+    resolved = resolve_scan_input(address)
+    requested = resolved.address
+    code = contract_code_at(requested, chain_id=spec.id)
+    kind = runtime_kind(code)
+    if kind in {"empty", "eip7702"}:
+        who = describe_target(resolved)
+        if kind == "eip7702":
+            raise NotAContractError(
+                f"{who} is a wallet on {spec.label}, not a contract. "
+                "Delegated account code (EIP-7702) is not verified Solidity. "
+                "Paste a .sol file if you have the source."
+            )
+        raise NotAContractError(
+            f"{who} is not a contract on {spec.label}. "
+            "Wallets and empty addresses have no Solidity to scan. "
+            "Paste a .sol file if you have the source."
+        )
+    on_chain = True if kind == "contract" else None
+    declared = fetch_verified_source(
+        requested,
+        api_key=api_key,
+        chain_id=spec.id,
+        on_chain=on_chain,
+        lookup=resolved.lookup,
+    )
     hop = resolve_implementation_address(declared, requested, rpc_url=spec.rpc_url())
     if not hop:
-        return ScanTarget(requested, declared, None, "declared")
+        return ScanTarget(requested, declared, None, "declared", lookup=resolved.lookup)
 
     target = _load_implementation(
         requested, declared, hop, api_key=api_key, chain_id=spec.id
     )
+    target.lookup = resolved.lookup
     if target.source_role != "implementation":
         return target
 
@@ -132,6 +164,7 @@ def fetch_scan_target(
     nested = _load_implementation(
         requested, target.analyzed, extra, api_key=api_key, chain_id=spec.id
     )
+    nested.lookup = resolved.lookup
     if nested.source_role == "implementation":
         return nested
     return target
@@ -139,6 +172,7 @@ def fetch_scan_target(
 
 def apply_scan_target(result: ScanResult, target: ScanTarget) -> ScanResult:
     result.address = target.requested
+    result.lookup_name = target.lookup
     result.implementation_address = target.implementation
     result.analyzed_address = checksum_address(target.analyzed.address)
     result.analyzed_name = target.analyzed.name

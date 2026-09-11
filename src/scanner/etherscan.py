@@ -402,6 +402,9 @@ def fetch_verified_source(
     address: str,
     api_key: Optional[str] = None,
     chain_id: Optional[int] = None,
+    *,
+    on_chain: Optional[bool] = None,
+    lookup: Optional[str] = None,
 ) -> VerifiedContract:
     """Fetch verified Solidity: Sourcify, then Etherscan V2 (API key), then Blockscout."""
     from scanner.settings import load_environment
@@ -443,13 +446,22 @@ def fetch_verified_source(
         errors.append(f"Blockscout failed ({_short_exc(exc, key)})")
 
     names = ", ".join(missed) if missed else "explorers"
-    message = f"No verified Solidity source on {names} for this chain."
+    who = f"{lookup} ({address})" if lookup else "This address"
+    if on_chain:
+        message = (
+            f"{who} is a contract on {spec.label}, but the source is not verified on {names}. "
+            "ChainSentry compiles Solidity; it does not scan bytecode."
+        )
+    else:
+        message = f"No verified Solidity source on {names} for this chain."
     if not key:
         message += (
             " This demo uses Sourcify, then Blockscout; it has no Etherscan key, "
             "so explorer-only contracts will miss. Try the example address, or paste a .sol file. "
             "You can add an Etherscan key in Settings (this browser only), or locally set ETHERSCAN_API_KEY in .env."
         )
+    elif on_chain:
+        message += " Verify it on an explorer, or paste the .sol file."
     else:
         message += " The contract is not verified on those explorers."
     if errors:

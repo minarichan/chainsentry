@@ -8,10 +8,11 @@ IMPL = "0x0000000000000000000000000000000000000002"
 BEACON = "0x0000000000000000000000000000000000000003"
 
 
-def _stub_chain(monkeypatch, *, slot=None, clone=None, beacon=None) -> None:
+def _stub_chain(monkeypatch, *, slot=None, clone=None, beacon=None, code: bytes | None = b"\x60\x80") -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: slot)
     monkeypatch.setattr("scanner.proxy.read_eip1167_implementation", lambda *a, **k: clone)
     monkeypatch.setattr("scanner.proxy.read_beacon_implementation", lambda *a, **k: beacon)
+    monkeypatch.setattr("scanner.proxy.contract_code_at", lambda *a, **k: code)
 
 
 def _verified(address: str, name: str, *, is_proxy: bool = False, implementation: str | None = None) -> VerifiedContract:
@@ -39,7 +40,7 @@ def _verified(address: str, name: str, *, is_proxy: bool = False, implementation
 def test_follows_explorer_implementation(monkeypatch) -> None:
     _stub_chain(monkeypatch)
 
-    def fake_fetch(address: str, api_key=None, chain_id=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=IMPL)
         return _verified(IMPL, "Logic")
@@ -62,7 +63,7 @@ def test_follows_explorer_implementation(monkeypatch) -> None:
 def test_falls_back_when_implementation_unverified(monkeypatch) -> None:
     _stub_chain(monkeypatch)
 
-    def fake_fetch(address: str, api_key=None, chain_id=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=IMPL)
         raise SourceNotVerifiedError("impl not verified")
@@ -78,7 +79,7 @@ def test_no_follow_without_implementation(monkeypatch) -> None:
     _stub_chain(monkeypatch)
     monkeypatch.setattr(
         "scanner.proxy.fetch_verified_source",
-        lambda address, api_key=None, chain_id=None: _verified(address, "Plain"),
+        lambda address, api_key=None, chain_id=None, **kwargs: _verified(address, "Plain"),
     )
     target = fetch_scan_target(PROXY)
     assert target.source_role == "declared"
@@ -88,7 +89,7 @@ def test_no_follow_without_implementation(monkeypatch) -> None:
 def test_eip1967_used_when_explorer_omits_impl(monkeypatch) -> None:
     _stub_chain(monkeypatch, slot=IMPL)
 
-    def fake_fetch(address: str, api_key=None, chain_id=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Proxy", is_proxy=True, implementation=None)
         return _verified(IMPL, "Logic")
@@ -116,7 +117,7 @@ def test_parse_eip1167_runtime() -> None:
 def test_follows_minimal_proxy_bytecode(monkeypatch) -> None:
     _stub_chain(monkeypatch, clone=IMPL)
 
-    def fake_fetch(address: str, api_key=None, chain_id=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
         if address.lower() == PROXY.lower():
             return _verified(PROXY, "Clone")
         return _verified(IMPL, "Logic")
@@ -142,8 +143,9 @@ def test_follows_beacon_then_logic(monkeypatch) -> None:
     monkeypatch.setattr("scanner.proxy.read_eip1967_implementation", lambda *a, **k: None)
     monkeypatch.setattr("scanner.proxy.read_eip1167_implementation", clone_or_beacon)
     monkeypatch.setattr("scanner.proxy.read_beacon_implementation", beacon_logic)
+    monkeypatch.setattr("scanner.proxy.contract_code_at", lambda *a, **k: b"\x60\x80")
 
-    def fake_fetch(address: str, api_key=None, chain_id=None):
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
         lowered = address.lower()
         if lowered == PROXY.lower():
             return _verified(PROXY, "Clone")
@@ -156,3 +158,82 @@ def test_follows_beacon_then_logic(monkeypatch) -> None:
     assert target.source_role == "implementation"
     assert target.analyzed.name == "Logic"
     assert target.implementation.lower() == IMPL.lower()
+
+
+def test_empty_code_stops_before_source_fetch(monkeypatch) -> None:
+    from scanner.lookup import NotAContractError
+
+    _stub_chain(monkeypatch, code=b"")
+
+    def fail_fetch(*args, **kwargs):
+        raise AssertionError("must not fetch source for an EOA")
+
+    monkeypatch.setattr("scanner.proxy.fetch_verified_source", fail_fetch)
+    try:
+        fetch_scan_target(PROXY)
+        raise AssertionError("expected NotAContractError")
+    except NotAContractError as exc:
+        message = str(exc)
+        assert "not a contract" in message.lower()
+        assert "Ethereum" in message
+
+
+def test_eip7702_wallet_stops_before_source_fetch(monkeypatch) -> None:
+    from scanner.lookup import NotAContractError
+
+    delegated = bytes.fromhex("ef0100") + bytes.fromhex("7702cb554e6bfb442cb743a7df23154544a7176c")
+    _stub_chain(monkeypatch, code=delegated)
+
+    def fail_fetch(*args, **kwargs):
+        raise AssertionError("must not fetch source for a 7702 wallet")
+
+    monkeypatch.setattr("scanner.proxy.fetch_verified_source", fail_fetch)
+    try:
+        fetch_scan_target(PROXY)
+        raise AssertionError("expected NotAContractError")
+    except NotAContractError as exc:
+        message = str(exc).lower()
+        assert "wallet" in message
+        assert "eip-7702" in message
+        assert "not a contract" in message
+
+
+def test_ens_name_resolves_then_fetches(monkeypatch) -> None:
+    from scanner.lookup import ResolvedTarget
+
+    _stub_chain(monkeypatch)
+    monkeypatch.setattr(
+        "scanner.proxy.resolve_scan_input",
+        lambda value, ens_rpc_url=None: ResolvedTarget(PROXY, "example.eth"),
+    )
+
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
+        assert address.lower() == PROXY.lower()
+        assert kwargs.get("lookup") == "example.eth"
+        return _verified(PROXY, "Named")
+
+    monkeypatch.setattr("scanner.proxy.fetch_verified_source", fake_fetch)
+    target = fetch_scan_target("example.eth")
+    assert target.requested.lower() == PROXY.lower()
+    assert target.lookup == "example.eth"
+    result = apply_scan_target(scan_verified(target.analyzed), target)
+    assert result.lookup_name == "example.eth"
+
+
+def test_unverified_contract_message_says_not_verified(monkeypatch) -> None:
+    from scanner.etherscan import SourceNotVerifiedError
+
+    _stub_chain(monkeypatch)
+
+    def fake_fetch(address: str, api_key=None, chain_id=None, **kwargs):
+        raise SourceNotVerifiedError(
+            "This address is a contract on Ethereum, but the source is not verified on Sourcify, Blockscout."
+        )
+
+    monkeypatch.setattr("scanner.proxy.fetch_verified_source", fake_fetch)
+    try:
+        fetch_scan_target(PROXY)
+        raise AssertionError("expected SourceNotVerifiedError")
+    except SourceNotVerifiedError as exc:
+        assert "is a contract" in str(exc)
+        assert "not verified" in str(exc)
